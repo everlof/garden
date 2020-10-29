@@ -1,3 +1,504 @@
+var Game={
+	'turboSoil': 0,
+	'seedlessToNay': 0,
+
+	'cookies': 50000000000,
+	'cookiesPs': 500000,
+
+	'tooltip': {
+		'dynamic': 0,
+		'shouldHide': 0
+	},
+	'prefs': {
+		'format': 0
+	}
+};
+
+var M={
+	'parent': {
+		'id': 2,
+		'level': 4
+	},
+};
+
+Game.Spend=function(howmuch)
+{
+	Game.cookies-=howmuch;
+}
+
+//display sparkles at a set position
+Game.sparkles=l('sparkles');
+Game.sparklesT=0;
+Game.sparklesFrames=16;
+Game.SparkleAt=function(x,y)
+{
+	if (Game.blendModesOn)
+	{
+		Game.sparklesT=Game.sparklesFrames+1;
+		Game.sparkles.style.backgroundPosition='0px 0px';
+		Game.sparkles.style.left=Math.floor(x-64)+'px';
+		Game.sparkles.style.top=Math.floor(y-64)+'px';
+		Game.sparkles.style.display='block';
+	}
+}
+
+function randomFloor(x) {if ((x%1)<Math.random()) return Math.floor(x); else return Math.ceil(x);}
+
+function shuffle(array)
+{
+	var counter = array.length, temp, index;
+	// While there are elements in the array
+	while (counter--)
+	{
+		// Pick a random index
+		index = (Math.random() * counter) | 0;
+
+		// And swap the last element with it
+		temp = array[counter];
+		array[counter] = array[index];
+		array[index] = temp;
+	}
+	return array;
+}
+
+var sinArray=[];
+for (var i=0;i<360;i++)
+{
+	//let's make a lookup table
+	sinArray[i]=Math.sin(i/360*Math.PI*2);
+}
+function quickSin(x)
+{
+	//oh man this isn't all that fast actually
+	//why do I do this. why
+	var sign=x<0?-1:1;
+	return sinArray[Math.round(
+		(Math.abs(x)*360/Math.PI/2)%360
+	)]*sign;
+}
+
+// M.parent.id
+// M.parent=Game.Objects['Farm'];
+// M.parent.minigame=M;
+
+Game.keys=[];
+AddEvent(window,'keyup',function(e){
+	Game.lastActivity=Game.time;
+	if (e.keyCode==27)
+	{
+		Game.ClosePrompt();
+		if (Game.AscendTimer>0) Game.AscendTimer=Game.AscendDuration;
+	}//esc closes prompt
+	else if (e.keyCode==13) Game.ConfirmPrompt();//enter confirms prompt
+	Game.keys[e.keyCode]=0;
+});
+AddEvent(window,'keydown',function(e){
+	if (!Game.OnAscend && Game.AscendTimer==0)
+	{
+		if (e.ctrlKey && e.keyCode==83) {Game.toSave=true;e.preventDefault();}//ctrl-s saves the game
+		else if (e.ctrlKey && e.keyCode==79) {Game.ImportSave();e.preventDefault();}//ctrl-o opens the import menu
+	}
+	if ((e.keyCode==16 || e.keyCode==17) && Game.tooltip.dynamic) Game.tooltip.update();
+	Game.keys[e.keyCode]=1;
+});
+
+AddEvent(window,'visibilitychange',function(e){
+	Game.keys=[];//reset all key pressed on visibility change (should help prevent ctrl still being down after ctrl-tab)
+});
+
+var PlaySound=function(url,vol,pitchVar)
+{
+	//url : the url of the sound to play (will be cached so it only loads once)
+	//vol : volume between 0 and 1 (multiplied by game volume setting); defaults to 1 (full volume)
+	//(DISABLED) pitchVar : pitch variance in browsers that support it (Firefox only at the moment); defaults to 0.05 (which means pitch can be up to -5% or +5% anytime the sound plays)
+	var volume=1;
+	if (typeof vol!=='undefined') volume=vol;
+	if (!Game.volume || volume==0) return 0;
+	if (!Sounds[url])
+	{
+		//sound isn't loaded, cache it
+		Sounds[url]=new Audio(url);
+		Sounds[url].onloadeddata=function(e){PlaySound(url,vol,pitchVar);}
+	}
+	else if (Sounds[url].readyState>=2)
+	{
+		var sound=SoundInsts[SoundI];
+		SoundI++;
+		if (SoundI>=12) SoundI=0;
+		sound.src=Sounds[url].src;
+		//sound.currentTime=0;
+		sound.volume=Math.pow(volume*Game.volume/100,2);
+		if (pitchSupport)
+		{
+			var pitchVar=(typeof pitchVar==='undefined')?0.05:pitchVar;
+			var rate=1+(Math.random()*2-1)*pitchVar;
+			sound.preservesPitch=false;
+			sound.mozPreservesPitch=false;
+			sound.webkitPreservesPitch=false;
+			sound.playbackRate=rate;
+		}
+		sound.play();
+	}
+}
+
+Game.sayTime=function(time,detail)
+		{
+			//time is a value where one second is equal to Game.fps (30).
+			//detail skips days when >1, hours when >2, minutes when >3 and seconds when >4.
+			//if detail is -1, output something like "3 hours, 9 minutes, 48 seconds"
+			if (time<=0) return '';
+			var str='';
+			var detail=detail||0;
+			time=Math.floor(time);
+			if (detail==-1)
+			{
+				//var months=0;
+				var days=0;
+				var hours=0;
+				var minutes=0;
+				var seconds=0;
+				//if (time>=Game.fps*60*60*24*30) months=(Math.floor(time/(Game.fps*60*60*24*30)));
+				if (time>=Game.fps*60*60*24) days=(Math.floor(time/(Game.fps*60*60*24)));
+				if (time>=Game.fps*60*60) hours=(Math.floor(time/(Game.fps*60*60)));
+				if (time>=Game.fps*60) minutes=(Math.floor(time/(Game.fps*60)));
+				if (time>=Game.fps) seconds=(Math.floor(time/(Game.fps)));
+				//days-=months*30;
+				hours-=days*24;
+				minutes-=hours*60+days*24*60;
+				seconds-=minutes*60+hours*60*60+days*24*60*60;
+				if (days>10) {hours=0;}
+				if (days) {minutes=0;seconds=0;}
+				if (hours) {seconds=0;}
+				var bits=[];
+				//if (months>0) bits.push(Beautify(months)+' month'+(days==1?'':'s'));
+				if (days>0) bits.push(Beautify(days)+' day'+(days==1?'':'s'));
+				if (hours>0) bits.push(Beautify(hours)+' hour'+(hours==1?'':'s'));
+				if (minutes>0) bits.push(Beautify(minutes)+' minute'+(minutes==1?'':'s'));
+				if (seconds>0) bits.push(Beautify(seconds)+' second'+(seconds==1?'':'s'));
+				if (bits.length==0) str='less than 1 second';
+				else str=bits.join(', ');
+			}
+			else
+			{
+				/*if (time>=Game.fps*60*60*24*30*2 && detail<1) str=Beautify(Math.floor(time/(Game.fps*60*60*24*30)))+' months';
+				else if (time>=Game.fps*60*60*24*30 && detail<1) str='1 month';
+				else */if (time>=Game.fps*60*60*24*2 && detail<2) str=Beautify(Math.floor(time/(Game.fps*60*60*24)))+' days';
+				else if (time>=Game.fps*60*60*24 && detail<2) str='1 day';
+				else if (time>=Game.fps*60*60*2 && detail<3) str=Beautify(Math.floor(time/(Game.fps*60*60)))+' hours';
+				else if (time>=Game.fps*60*60 && detail<3) str='1 hour';
+				else if (time>=Game.fps*60*2 && detail<4) str=Beautify(Math.floor(time/(Game.fps*60)))+' minutes';
+				else if (time>=Game.fps*60 && detail<4) str='1 minute';
+				else if (time>=Game.fps*2 && detail<5) str=Beautify(Math.floor(time/(Game.fps)))+' seconds';
+				else if (time>=Game.fps && detail<5) str='1 second';
+				else str='less than 1 second';
+			}
+			return str;
+		}
+
+function toFixed(x)
+{
+	if (Math.abs(x) < 1.0) {
+		var e = parseInt(x.toString().split('e-')[1]);
+		if (e) {
+			x *= Math.pow(10,e-1);
+			x = '0.' + (new Array(e)).join('0') + x.toString().substring(2);
+		}
+	} else {
+		var e = parseInt(x.toString().split('+')[1]);
+		if (e > 20) {
+			e -= 20;
+			x /= Math.pow(10,e);
+			x += (new Array(e+1)).join('0');
+		}
+	}
+	return x;
+}
+
+//Beautify and number-formatting adapted from the Frozen Cookies add-on (http://cookieclicker.wikia.com/wiki/Frozen_Cookies_%28JavaScript_Add-on%29)
+function formatEveryThirdPower(notations)
+{
+	return function (value)
+	{
+		var base = 0,
+		notationValue = '';
+		if (!isFinite(value)) return 'Infinity';
+		if (value >= 1000000)
+		{
+			value /= 1000;
+			while(Math.round(value) >= 1000)
+			{
+				value /= 1000;
+				base++;
+			}
+			if (base >= notations.length) {return 'Infinity';} else {notationValue = notations[base];}
+		}
+		return ( Math.round(value * 1000) / 1000 ) + notationValue;
+	};
+}
+
+function rawFormatter(value) {return Math.round(value * 1000) / 1000;}
+
+var formatLong=[' thousand',' million',' billion',' trillion',' quadrillion',' quintillion',' sextillion',' septillion',' octillion',' nonillion'];
+var prefixes=['','un','duo','tre','quattuor','quin','sex','septen','octo','novem'];
+var suffixes=['decillion','vigintillion','trigintillion','quadragintillion','quinquagintillion','sexagintillion','septuagintillion','octogintillion','nonagintillion'];
+for (var i in suffixes)
+{
+	for (var ii in prefixes)
+	{
+		formatLong.push(' '+prefixes[ii]+suffixes[i]);
+	}
+}
+
+var formatShort=['k','M','B','T','Qa','Qi','Sx','Sp','Oc','No'];
+var prefixes=['','Un','Do','Tr','Qa','Qi','Sx','Sp','Oc','No'];
+var suffixes=['D','V','T','Qa','Qi','Sx','Sp','O','N'];
+for (var i in suffixes)
+{
+	for (var ii in prefixes)
+	{
+		formatShort.push(' '+prefixes[ii]+suffixes[i]);
+	}
+}
+formatShort[10]='Dc';
+
+
+var numberFormatters =
+[
+	formatEveryThirdPower(formatShort),
+	formatEveryThirdPower(formatLong),
+	rawFormatter
+];
+function Beautify(value,floats)
+{
+	var negative=(value<0);
+	var decimal='';
+	var fixed=value.toFixed(floats);
+	if (Math.abs(value)<1000 && floats>0 && Math.floor(fixed)!=fixed) decimal='.'+(fixed.toString()).split('.')[1];
+	value=Math.floor(Math.abs(value));
+	if (floats>0 && fixed==value+1) value++;
+	var formatter=numberFormatters[Game.prefs.format?2:1];
+	var output=(value.toString().indexOf('e+')!=-1 && Game.prefs.format==1)?value.toPrecision(3).toString():formatter(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g,',');
+	//var output=formatter(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g,',');
+	if (output=='0') negative=false;
+	return negative?'-'+output:output+decimal;
+}
+function shortenNumber(value)
+{
+	//if no scientific notation, return as is, else :
+	//keep only the 5 first digits (plus dot), round the rest
+	//may or may not work properly
+	if (value >= 1000000 && isFinite(value))
+	{
+		var num=value.toString();
+		var ind=num.indexOf('e+');
+		if (ind==-1) return value;
+		var str='';
+		for (var i=0;i<ind;i++)
+		{
+			str+=(i<6?num[i]:'0');
+		}
+		str+='e+';
+		str+=num.split('e+')[1];
+		return parseFloat(str);
+	}
+	return value;
+}
+
+SimpleBeautify=function(val)
+{
+	var str=val.toString();
+	var str2='';
+	for (var i in str)//add commas
+	{
+		if ((str.length-i)%3==0 && i>0) str2+=',';
+		str2+=str[i];
+	}
+	return str2;
+}
+
+var beautifyInTextFilter=/(([\d]+[,]*)+)/g;//new regex
+function BeautifyInTextFunction(str){return Beautify(parseInt(str.replace(/,/g,''),10));};
+function BeautifyInText(str) {return str.replace(beautifyInTextFilter,BeautifyInTextFunction);}//reformat every number inside a string
+function BeautifyAll()//run through upgrades and achievements to reformat the numbers
+{
+	var func=function(what){what.desc=BeautifyInText(what.baseDesc);}
+	Game.UpgradesById.forEach(func);
+	Game.AchievementsById.forEach(func);
+}
+
+Game.tooltip={text:'',x:0,y:0,origin:'',on:0,tt:l('tooltip'),tta:l('tooltipAnchor'),shouldHide:1,dynamic:0,from:0};
+Game.tooltip.draw=function(from,text,origin)
+{
+	this.shouldHide=0;
+	this.text=text;
+	this.from=from;
+	//this.x=x;
+	//this.y=y;
+	this.origin=origin;
+	var tt=this.tt;
+	var tta=this.tta;
+	tt.style.left='auto';
+	tt.style.top='auto';
+	tt.style.right='auto';
+	tt.style.bottom='auto';
+	if (typeof this.text==='function')
+	{
+		var text=this.text();
+		if (text=='') tta.style.opacity='0';
+		else
+		{
+			tt.innerHTML=unescape(text);
+			tta.style.opacity='1';
+		}
+	}
+	else tt.innerHTML=unescape(this.text);
+	//tt.innerHTML=(typeof this.text==='function')?unescape(this.text()):unescape(this.text);
+	tta.style.display='block';
+	tta.style.visibility='hidden';
+	Game.tooltip.update();
+	tta.style.visibility='visible';
+	this.on=1;
+}
+Game.tooltip.update=function()
+{
+	var X=0;
+	var Y=0;
+	var width=this.tt.offsetWidth;
+	var height=this.tt.offsetHeight;
+	if (this.origin=='store')
+	{
+		X=Game.windowW-332-width;
+		Y=Game.mouseY-32;
+		if (Game.onCrate) Y=Game.onCrate.getBoundingClientRect().top-42;
+		Y=Math.max(0,Math.min(Game.windowH-height-44,Y));
+		/*this.tta.style.right='308px';//'468px';
+		this.tta.style.left='auto';
+		if (Game.onCrate) Y=Game.onCrate.getBoundingClientRect().top-2;
+		this.tta.style.top=Math.max(0,Math.min(Game.windowH-this.tt.clientHeight-64,Y-48))+'px';*/
+	}
+	else
+	{
+		if (Game.onCrate)
+		{
+			var rect=Game.onCrate.getBoundingClientRect();
+			rect={left:rect.left,top:rect.top,right:rect.right,bottom:rect.bottom};
+			if (rect.left==0 && rect.top==0)//if we get that bug where we get stuck in the top-left, move to the mouse (REVISION : just do nothing)
+			{return false;/*rect.left=Game.mouseX-24;rect.right=Game.mouseX+24;rect.top=Game.mouseY-24;rect.bottom=Game.mouseY+24;*/}
+			if (this.origin=='left')
+			{
+				X=rect.left-width-16;
+				Y=rect.top+(rect.bottom-rect.top)/2-height/2-38;
+				Y=Math.max(0,Math.min(Game.windowH-height-19,Y));
+				if (X<0) X=rect.right;
+			}
+			else
+			{
+				X=rect.left+(rect.right-rect.left)/2-width/2-8;
+				Y=rect.top-height-48;
+				X=Math.max(0,Math.min(Game.windowW-width-16,X));
+				if (Y<0) Y=rect.bottom-32;
+			}
+		}
+		else if (this.origin=='bottom-right')
+		{
+			X=Game.mouseX+8;
+			Y=Game.mouseY-32;
+			X=Math.max(0,Math.min(Game.windowW-width-16,X));
+			Y=Math.max(0,Math.min(Game.windowH-height-64,Y));
+		}
+		else if (this.origin=='bottom')
+		{
+			X=Game.mouseX-width/2-8;
+			Y=Game.mouseY+24;
+			X=Math.max(0,Math.min(Game.windowW-width-16,X));
+			Y=Math.max(0,Math.min(Game.windowH-height-64,Y));
+		}
+		else if (this.origin=='left')
+		{
+			X=Game.mouseX-width-24;
+			Y=Game.mouseY-height/2-8;
+			X=Math.max(0,Math.min(Game.windowW-width-16,X));
+			Y=Math.max(0,Math.min(Game.windowH-height-64,Y));
+		}
+		else if (this.origin=='this' && this.from)
+		{
+			var rect=this.from.getBoundingClientRect();
+			X=(rect.left+rect.right)/2-width/2-8;
+			Y=(rect.top)-this.tt.clientHeight-48;
+			X=Math.max(0,Math.min(Game.windowW-width-16,X));
+			//Y=Math.max(0,Math.min(Game.windowH-this.tt.clientHeight-64,Y));
+			if (Y<0) Y=(rect.bottom-24);
+			if (Y+height+40>Game.windowH)
+			{
+				X=rect.right+8;
+				Y=rect.top+(rect.bottom-rect.top)/2-height/2-38;
+				Y=Math.max(0,Math.min(Game.windowH-height-19,Y));
+			}
+		}
+		else
+		{
+			X=Game.mouseX-width/2-8;
+			Y=Game.mouseY-height-32;
+			X=Math.max(0,Math.min(Game.windowW-width-16,X));
+			Y=Math.max(0,Math.min(Game.windowH-height-64,Y));
+		}
+	}
+	this.tta.style.left=X+'px';
+	this.tta.style.right='auto';
+	this.tta.style.top=Y+'px';
+	this.tta.style.bottom='auto';
+	if (this.shouldHide) {this.hide();this.shouldHide=0;}
+	else if (Game.drawT%10==0 && typeof(this.text)==='function')
+	{
+		var text=this.text();
+		if (text=='') this.tta.style.opacity='0';
+		else
+		{
+			this.tt.innerHTML=unescape(text);
+			this.tta.style.opacity='1';
+		}
+	}
+}
+Game.tooltip.hide=function()
+{
+	this.tta.style.display='none';
+	this.dynamic=0;
+	this.on=0;
+}
+Game.getTooltip=function(text,origin,isCrate)
+{
+	origin=(origin?origin:'middle');
+	if (isCrate) return 'onMouseOut="Game.setOnCrate(0);Game.tooltip.shouldHide=1;" onMouseOver="if (!Game.mouseDown) {Game.setOnCrate(this);Game.tooltip.dynamic=0;Game.tooltip.draw(this,\''+escape(text)+'\',\''+origin+'\');Game.tooltip.wobble();}"';
+	else return 'onMouseOut="Game.tooltip.shouldHide=1;" onMouseOver="Game.tooltip.dynamic=0;Game.tooltip.draw(this,\''+escape(text)+'\',\''+origin+'\');Game.tooltip.wobble();"';
+}
+Game.getDynamicTooltip=function(func,origin,isCrate)
+{
+	origin=(origin?origin:'middle');
+	if (isCrate) return 'onMouseOut="Game.setOnCrate(0);Game.tooltip.shouldHide=1;" onMouseOver="if (!Game.mouseDown) {Game.setOnCrate(this);Game.tooltip.dynamic=1;Game.tooltip.draw(this,'+'function(){return '+func+'();}'+',\''+origin+'\');Game.tooltip.wobble();}"';
+	return 'onMouseOut="Game.tooltip.shouldHide=1;" onMouseOver="Game.tooltip.dynamic=1;Game.tooltip.draw(this,'+'function(){return '+func+'();}'+',\''+origin+'\');Game.tooltip.wobble();"';
+}
+Game.attachTooltip=function(el,func,origin)
+{
+	if (typeof func==='string')
+	{
+		var str=func;
+		func=function(str){return function(){return str;};}(str);
+	}
+	origin=(origin?origin:'middle');
+	AddEvent(el,'mouseover',function(func,el,origin){return function(){Game.tooltip.dynamic=1;Game.tooltip.draw(el,func,origin);};}(func,el,origin));
+	AddEvent(el,'mouseout',function(){return function(){Game.tooltip.shouldHide=1;};}());
+}
+Game.tooltip.wobble=function()
+{
+	//disabled because this effect doesn't look good with the slight slowdown it might or might not be causing.
+	if (false)
+	{
+		this.tt.className='framed';
+		void this.tt.offsetWidth;
+		this.tt.className='framed wobbling';
+	}
+}
+
 function l(what) {return document.getElementById(what);}
 function choose(arr) {return arr[Math.floor(Math.random()*arr.length)];}
 
@@ -10,32 +511,20 @@ function AddEvent(html_element, event_name, event_function)
 	else if(html_element.addEventListener) html_element.addEventListener(event_name, event_function, false);
 }
 
-var Game={
-	'turboSoil': 0,
-	'seedlessToNay': 0,
-	'tooltip': {
-		'dynamic': 0,
-		'shouldHide': 0
-	}
-};
 
-Game.getDynamicTooltip=function(func,origin,isCrate)
-{
-	origin=(origin?origin:'middle');
-	if (isCrate) return 'onMouseOut="Game.setOnCrate(0);Game.tooltip.shouldHide=1;" onMouseOver="if (!Game.mouseDown) {Game.setOnCrate(this);Game.tooltip.dynamic=1;Game.tooltip.draw(this,'+'function(){return '+func+'();}'+',\''+origin+'\');Game.tooltip.wobble();}"';
-	return 'onMouseOut="Game.tooltip.shouldHide=1;" onMouseOver="Game.tooltip.dynamic=1;Game.tooltip.draw(this,'+'function(){return '+func+'();}'+',\''+origin+'\');Game.tooltip.wobble();"';
-}
 
-var M={
-	'parent': {
-		'id': 2,
-		'level': 4
-	},
-};
 
-// M.parent.id
-// M.parent=Game.Objects['Farm'];
-// M.parent.minigame=M;
+
+
+
+
+
+
+
+
+
+
+
 
 M.launch=function()
 {
@@ -1144,7 +1633,7 @@ M.launch=function()
 					{
 						var it=M.plants[me.children[i]];
 						if (it.unlocked) children+='<div class="gardenSeedTiny" style="background-position:'+(-0*48)+'px '+(-it.icon*48)+'px;"></div>';
-						else children+='<div class="gardenSeedTiny" style="background-image:https://orteil.dashnet.org/cookieclicker/img/icons.png?v=2.029);background-position:'+(-0*48)+'px '+(-7*48)+'px;opacity:0.35;"></div>';
+						else children+='<div class="gardenSeedTiny" style="background-image:url(img/icons.png);background-position:'+(-0*48)+'px '+(-7*48)+'px;opacity:0.35;"></div>';
 					}
 				}
 				children+='</div>';
@@ -1185,7 +1674,7 @@ M.launch=function()
 				var str='<div style="padding:8px 4px;min-width:350px;">'+
 					(M.parent.amount<me.req?(
 						'<div style="text-align:center;">Soil unlocked at '+me.req+' farms.</div>'
-					):('<div class="icon" style="background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);float:left;margin-left:-8px;margin-top:-8px;background-position:'+(-me.icon*48)+'px '+(-34*48)+'px;"></div>'+
+					):('<div class="icon" style="background:url(img/gardenPlants.png);float:left;margin-left:-8px;margin-top:-8px;background-position:'+(-me.icon*48)+'px '+(-34*48)+'px;"></div>'+
 					'<div><div class="name">'+me.name+'</div><div><small>'+((M.soil==me.id)?'Your field is currently using this soil.':(M.nextSoil>Date.now())?'You will be able to change your soil again in '+Game.sayTime((M.nextSoil-Date.now())/1000*30+30,-1)+'.':'Click to use this type of soil for your whole field.')+'</small></div></div>'+
 					'<div class="line"></div>'+
 					'<div class="description">'+
@@ -1202,9 +1691,9 @@ M.launch=function()
 			return function(){
 				var me=M.plantsById[id];
 				var str='<div style="padding:8px 4px;min-width:400px;">'+
-					'<div class="icon" style="background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);float:left;margin-left:-24px;margin-top:-4px;background-position:'+(-0*48)+'px '+(-me.icon*48)+'px;"></div>'+
-					'<div class="icon" style="background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);float:left;margin-left:-24px;margin-top:-28px;background-position:'+(-4*48)+'px '+(-me.icon*48)+'px;"></div>'+
-					'<div style="background:https://orteil.dashnet.org/cookieclicker/img/turnInto.png);width:20px;height:22px;position:absolute;left:28px;top:24px;z-index:1000;"></div>'+
+					'<div class="icon" style="background:url(img/gardenPlants.png);float:left;margin-left:-24px;margin-top:-4px;background-position:'+(-0*48)+'px '+(-me.icon*48)+'px;"></div>'+
+					'<div class="icon" style="background:url(img/gardenPlants.png);float:left;margin-left:-24px;margin-top:-28px;background-position:'+(-4*48)+'px '+(-me.icon*48)+'px;"></div>'+
+					'<div style="background:url(img/turnInto.png);width:20px;height:22px;position:absolute;left:28px;top:24px;z-index:1000;"></div>'+
 					(me.plantable?('<div style="float:right;text-align:right;width:100px;"><small>Planting cost :</small><br><span class="price'+(M.canPlant(me)?'':' disabled')+'">'+Beautify(Math.round(shortenNumber(M.getCost(me))))+'</span><br><small>'+Game.sayTime(me.cost*60*30,-1)+' of CpS,<br>minimum '+Beautify(me.costM)+' cookies</small></div>'):'')+
 					'<div style="width:300px;"><div class="name">'+me.name+' seed</div><div><small>'+(me.plantable?'Click to select this seed for planting.':'<span class="red">This seed cannot be planted.</span>')+'<br>Shift+ctrl+click to harvest all mature plants of this type.</small></div></div>'+
 					'<div class="line"></div>'+
@@ -1219,7 +1708,7 @@ M.launch=function()
 				var me=M.toolsById[id];
 				var icon=[me.icon,35];
 				var str='<div style="padding:8px 4px;min-width:350px;">'+
-					'<div class="icon" style="background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);float:left;margin-left:-8px;margin-top:-8px;background-position:'+(-icon[0]*48)+'px '+(-icon[1]*48)+'px;"></div>'+
+					'<div class="icon" style="background:url(img/gardenPlants.png);float:left;margin-left:-8px;margin-top:-8px;background-position:'+(-icon[0]*48)+'px '+(-icon[1]*48)+'px;"></div>'+
 					'<div><div class="name">'+me.name+'</div></div>'+
 					'<div class="line"></div>'+
 					'<div class="description">'+
@@ -1261,16 +1750,16 @@ M.launch=function()
 					else stage=1;
 					var icon=[stage,me.icon];
 					var str='<div style="padding:8px 4px;min-width:350px;">'+
-						'<div class="icon" style="background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);float:left;margin-left:-8px;margin-top:-8px;background-position:'+(-icon[0]*48)+'px '+(-icon[1]*48)+'px;"></div>'+
+						'<div class="icon" style="background:url(img/gardenPlants.png);float:left;margin-left:-8px;margin-top:-8px;background-position:'+(-icon[0]*48)+'px '+(-icon[1]*48)+'px;"></div>'+
 						'<div class="name">'+me.name+'</div><div><small>This plant is growing here.</small></div>'+
 						'<div class="line"></div>'+
 						'<div style="text-align:center;">'+
 							'<div style="display:inline-block;position:relative;box-shadow:0px 0px 0px 1px #000,0px 0px 0px 1px rgba(255,255,255,0.5) inset,0px -2px 2px 0px rgba(255,255,255,0.5) inset;width:256px;height:6px;background:linear-gradient(to right,#fff 0%,#0f9 '+me.mature+'%,#3c0 '+(me.mature+0.1)+'%,#960 100%)">'+
 								'<div class="gardenGrowthIndicator" style="left:'+Math.floor((tile[1]/100)*256)+'px;"></div>'+
-								'<div style="background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);background-position:'+(-1*48)+'px '+(-icon[1]*48)+'px;position:absolute;left:'+(0-24)+'px;top:-32px;transform:scale(0.5,0.5);width:48px;height:48px;"></div>'+
-								'<div style="background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);background-position:'+(-2*48)+'px '+(-icon[1]*48)+'px;position:absolute;left:'+((((me.mature*0.333)/100)*256)-24)+'px;top:-32px;transform:scale(0.5,0.5);width:48px;height:48px;"></div>'+
-								'<div style="background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);background-position:'+(-3*48)+'px '+(-icon[1]*48)+'px;position:absolute;left:'+((((me.mature*0.666)/100)*256)-24)+'px;top:-32px;transform:scale(0.5,0.5);width:48px;height:48px;"></div>'+
-								'<div style="background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);background-position:'+(-4*48)+'px '+(-icon[1]*48)+'px;position:absolute;left:'+((((me.mature)/100)*256)-24)+'px;top:-32px;transform:scale(0.5,0.5);width:48px;height:48px;"></div>'+
+								'<div style="background:url(img/gardenPlants.png);background-position:'+(-1*48)+'px '+(-icon[1]*48)+'px;position:absolute;left:'+(0-24)+'px;top:-32px;transform:scale(0.5,0.5);width:48px;height:48px;"></div>'+
+								'<div style="background:url(img/gardenPlants.png);background-position:'+(-2*48)+'px '+(-icon[1]*48)+'px;position:absolute;left:'+((((me.mature*0.333)/100)*256)-24)+'px;top:-32px;transform:scale(0.5,0.5);width:48px;height:48px;"></div>'+
+								'<div style="background:url(img/gardenPlants.png);background-position:'+(-3*48)+'px '+(-icon[1]*48)+'px;position:absolute;left:'+((((me.mature*0.666)/100)*256)-24)+'px;top:-32px;transform:scale(0.5,0.5);width:48px;height:48px;"></div>'+
+								'<div style="background:url(img/gardenPlants.png);background-position:'+(-4*48)+'px '+(-icon[1]*48)+'px;position:absolute;left:'+((((me.mature)/100)*256)-24)+'px;top:-32px;transform:scale(0.5,0.5);width:48px;height:48px;"></div>'+
 							'</div><br>'+
 							'<b>Stage :</b> '+['bud','sprout','bloom','mature'][stage-1]+'<br>'+
 							'<small>'+(stage==1?'Plant effects : 10%':stage==2?'Plant effects : 25%':stage==3?'Plant effects : 50%':'Plant effects : 100%; may reproduce, will drop seed when harvested')+'</small>'+
@@ -1317,7 +1806,7 @@ M.launch=function()
 			{
 				var me=M.plants[i];
 				var icon=[0,me.icon];
-				str+='<div id="gardenSeed-'+me.id+'" class="gardenSeed'+(M.seedSelected==me.id?' on':'')+' locked" '+Game.getDynamicTooltip('Game.ObjectsById['+M.parent.id+'].minigame.seedTooltip('+me.id+')','this')+'>';
+				str+='<div id="gardenSeed-'+me.id+'" class="gardenSeed'+(M.seedSelected==me.id?' on':'')+' locked" '+Game.getDynamicTooltip('M.seedTooltip('+me.id+')','this')+'>';
 					str+='<div id="gardenSeedIcon-'+me.id+'" class="gardenSeedIcon shadowFilter" style="background-position:'+(-icon[0]*48)+'px '+(-icon[1]*48)+'px;"></div>';
 				str+='</div>';
 			}
@@ -1355,7 +1844,7 @@ M.launch=function()
 			{
 				var me=M.tools[i];
 				var icon=[me.icon,35];
-				str+='<div id="gardenTool-'+me.id+'" style="margin:8px;" class="gardenSeed'+((me.isOn && me.isOn())?' on':'')+''+((!me.isDisplayed || me.isDisplayed())?'':' locked')+'" '+Game.getDynamicTooltip('Game.ObjectsById['+M.parent.id+'].minigame.toolTooltip('+me.id+')','this')+'>';
+				str+='<div id="gardenTool-'+me.id+'" style="margin:8px;" class="gardenSeed'+((me.isOn && me.isOn())?' on':'')+''+((!me.isDisplayed || me.isDisplayed())?'':' locked')+'" '+Game.getDynamicTooltip('M.toolTooltip('+me.id+')','this')+'>';
 					str+='<div id="gardenToolIcon-'+me.id+'" class="gardenSeedIcon shadowFilter" style="background-position:'+(-icon[0]*48)+'px '+(-icon[1]*48)+'px;"></div>';
 				str+='</div>';
 			}
@@ -1374,7 +1863,7 @@ M.launch=function()
 			{
 				var me=M.soils[i];
 				var icon=[me.icon,34];
-				str+='<div id="gardenSoil-'+me.id+'" class="gardenSeed gardenSoil disabled'+(M.soil==me.id?' on':'')+'" '+Game.getDynamicTooltip('Game.ObjectsById['+M.parent.id+'].minigame.soilTooltip('+me.id+')','this')+'>';
+				str+='<div id="gardenSoil-'+me.id+'" class="gardenSeed gardenSoil disabled'+(M.soil==me.id?' on':'')+'" '+Game.getDynamicTooltip('M.soilTooltip('+me.id+')','this')+'>';
 					str+='<div id="gardenSoilIcon-'+me.id+'" class="gardenSeedIcon shadowFilter" style="background-position:'+(-icon[0]*48)+'px '+(-icon[1]*48)+'px;"></div>';
 				str+='</div>';
 			}
@@ -1407,7 +1896,7 @@ M.launch=function()
 				{
 					for (var x=0;x<6;x++)
 					{
-						str+='<div id="gardenTile-'+x+'-'+y+'" class="gardenTile" style="left:'+(x*M.tileSize)+'px;top:'+(y*M.tileSize)+'px;display:none;" '+Game.getDynamicTooltip('Game.ObjectsById['+M.parent.id+'].minigame.tileTooltip('+x+','+y+')','this')+'>';
+						str+='<div id="gardenTile-'+x+'-'+y+'" class="gardenTile" style="left:'+(x*M.tileSize)+'px;top:'+(y*M.tileSize)+'px;display:none;" '+Game.getDynamicTooltip('M.tileTooltip('+x+','+y+')','this')+'>';
 							str+='<div id="gardenTileIcon-'+x+'-'+y+'" class="gardenTileIcon" style="display:none;"></div>';
 						str+='</div>';
 					}
@@ -1624,7 +2113,7 @@ M.launch=function()
 
 		var str='';
 		str+='<style>'+
-		'#gardenBG{background:https://orteil.dashnet.org/cookieclicker/img/shadedBorders.png),https://orteil.dashnet.org/cookieclicker/img/BGgarden.jpg);background-size:100% 100%,auto;position:absolute;left:0px;right:0px;top:0px;bottom:16px;}'+
+		'#gardenBG{background:url(img/shadedBorders.png),url(img/BGgarden.jpg);background-size:100% 100%,auto;position:absolute;left:0px;right:0px;top:0px;bottom:16px;}'+
 		'#gardenContent{position:relative;box-sizing:border-box;padding:4px 24px;height:'+(6*M.tileSize+16+48+48)+'px;}'+
 		'.gardenFrozen{box-shadow:0px 0px 16px rgba(255,255,255,1) inset,0px 0px 48px 24px rgba(200,255,225,0.5) inset;}'+
 		'#gardenPanel{text-align:center;margin:0px;padding:0px;position:absolute;left:4px;top:4px;bottom:4px;right:65%;overflow-y:auto;overflow-x:hidden;box-shadow:8px 0px 8px rgba(0,0,0,0.5);}'+
@@ -1634,24 +2123,24 @@ M.launch=function()
 		'.gardenTile{cursor:pointer;width:'+M.tileSize+'px;height:'+M.tileSize+'px;position:absolute;}'+
 		//'.gardenTile:before{transform:translate(0,0);pointer-events:none;content:\'\';display:block;position:absolute;left:0px;top:0px;right:0px;bottom:0px;margin:6px;border-radius:12px;background:rgba(0,0,0,0.1);box-shadow:0px 0px 4px rgba(255,255,255,0.2),-4px 4px 4px 2px rgba(0,0,0,0.2) inset;}'+
 		//'.gardenTile:hover:before{margin:2px;animation:wobble 0.5s;}'+
-		'.gardenTile:before{transform:translate(0,0);opacity:0.65;transition:opacity 0.2s;pointer-events:none;content:\'\';display:block;position:absolute;left:0px;top:0px;right:0px;bottom:0px;margin:0px;background:https://orteil.dashnet.org/cookieclicker/img/gardenPlots.png);}'+
+		'.gardenTile:before{transform:translate(0,0);opacity:0.65;transition:opacity 0.2s;pointer-events:none;content:\'\';display:block;position:absolute;left:0px;top:0px;right:0px;bottom:0px;margin:0px;background:url(img/gardenPlots.png);}'+
 			'.gardenTile:nth-child(4n+1):before{background-position:40px 0px;}'+
 			'.gardenTile:nth-child(4n+2):before{background-position:80px 0px;}'+
 			'.gardenTile:nth-child(4n+3):before{background-position:120px 0px;}'+
 			'.gardenTile:hover:before{opacity:1;animation:wobble 0.5s;}'+
 			'.noFancy .gardenTile:hover:before{opacity:1;animation:none;}'+
-		'.gardenTileIcon{transform:translate(0,0);pointer-events:none;transform-origin:50% 40px;width:48px;height:48px;position:absolute;left:-'+((48-M.tileSize)/2)+'px;top:-'+((48-M.tileSize)/2+8)+'px;background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);}'+
+		'.gardenTileIcon{transform:translate(0,0);pointer-events:none;transform-origin:50% 40px;width:48px;height:48px;position:absolute;left:-'+((48-M.tileSize)/2)+'px;top:-'+((48-M.tileSize)/2+8)+'px;background:url(img/gardenPlants.png);}'+
 			'.gardenTile:hover .gardenTileIcon{animation:pucker 0.3s;}'+
 			'.noFancy .gardenTile:hover .gardenTileIcon{animation:none;}'+
 		'#gardenDrag{pointer-events:none;position:absolute;left:0px;top:0px;right:0px;bottom:0px;overflow:hidden;z-index:1000000001;}'+
-		'#gardenCursor{transition:transform 0.1s;display:none;pointer-events:none;width:48px;height:48px;position:absolute;background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);}'+
+		'#gardenCursor{transition:transform 0.1s;display:none;pointer-events:none;width:48px;height:48px;position:absolute;background:url(img/gardenPlants.png);}'+
 		'.gardenSeed{cursor:pointer;display:inline-block;width:40px;height:40px;position:relative;}'+
 		'.gardenSeed.locked{display:none;}'+
-		'.gardenSeedIcon{pointer-events:none;transform:translate(0,0);display:inline-block;position:absolute;left:-4px;top:-4px;width:48px;height:48px;background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);}'+
+		'.gardenSeedIcon{pointer-events:none;transform:translate(0,0);display:inline-block;position:absolute;left:-4px;top:-4px;width:48px;height:48px;background:url(img/gardenPlants.png);}'+
 			'.gardenSeed:hover .gardenSeedIcon{animation:bounce 0.8s;z-index:1000000001;}'+
 			'.gardenSeed:active .gardenSeedIcon{animation:pucker 0.2s;}'+
 			'.noFancy .gardenSeed:hover .gardenSeedIcon,.noFancy .gardenSeed:active .gardenSeedIcon{animation:none;}'+
-		'.gardenPanelLabel{font-size:12px;width:100%;padding:2px;margin-top:4px;margin-bottom:-4px;}'+'.gardenSeedTiny{transform:scale(0.5,0.5);margin:-20px -16px;display:inline-block;width:48px;height:48px;background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);}'+
+		'.gardenPanelLabel{font-size:12px;width:100%;padding:2px;margin-top:4px;margin-bottom:-4px;}'+'.gardenSeedTiny{transform:scale(0.5,0.5);margin:-20px -16px;display:inline-block;width:48px;height:48px;background:url(img/gardenPlants.png);}'+
 		'.gardenSeed.on:before{pointer-events:none;content:\'\';display:block;position:absolute;left:0px;top:0px;right:0px;bottom:0px;margin:-2px;border-radius:12px;transform:rotate(45deg);background:rgba(0,0,0,0.2);box-shadow:0px 0px 8px rgba(255,255,255,0.75);}'+
 
 		'.gardenGrowthIndicator{background:#000;box-shadow:0px 0px 0px 1px #fff,0px 0px 0px 2px #000,2px 2px 2px 2px rgba(0,0,0,0.5);position:absolute;top:0px;width:1px;height:6px;z-index:100;}'+
@@ -1679,7 +2168,7 @@ M.launch=function()
 				str+='<div id="gardenPlot" class="shadowFilter" style="width:'+(6*M.tileSize)+'px;height:'+(6*M.tileSize)+'px;"></div>';
 				str+='<div style="margin-top:0px;" id="gardenSoils"></div>';
 				str+='<div id="gardenInfo">';
-					str+='<div '+Game.getDynamicTooltip('Game.ObjectsById[2].minigame.refillTooltip','this')+' id="gardenLumpRefill" class="usesIcon shadowFilter lumpRefill" style="display:none;left:-8px;top:-6px;background-position:'+(-29*48)+'px '+(-14*48)+'px;"></div>';
+					str+='<div '+Game.getDynamicTooltip('M.refillTooltip','this')+' id="gardenLumpRefill" class="usesIcon shadowFilter lumpRefill" style="display:none;left:-8px;top:-6px;background-position:'+(-29*48)+'px '+(-14*48)+'px;"></div>';
 					str+='<div id="gardenNextTick">Initializing...</div>';
 					str+='<div id="gardenStats"></div>';
 				str+='</div>';

@@ -7,9 +7,17 @@
   <meta name="author" content="">
   <meta name="description" content="">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <link href="style.css" rel="stylesheet" type="text/css">
 </head>
 
 <body>
+  <div id="tooltipAnchor" style="left: 1023px; right: auto; top: 278px; bottom: auto; display: none; opacity: 1; visibility: visible;">
+    <div id="tooltip" class="framed" onmouseout="Game.tooltip.hide();" style="left: auto; top: auto; right: auto; bottom: auto;">
+    </div>
+  </div>
+  <div id="sparkles" class="sparkles" style="background-position: -2048px 0px; left: 501px; top: 38px; display: none;"></div>
+
     <div class="rowSpecial" id="rowSpecial2"></div>
     <!-- <script src="main.js"></script> -->
     <script src="minigameGarden.js"></script>

@@ -10,7 +10,14 @@ function AddEvent(html_element, event_name, event_function)
 	else if(html_element.addEventListener) html_element.addEventListener(event_name, event_function, false);
 }
 
-var Game={};
+var Game={
+	'turboSoil': 0,
+	'seedlessToNay': 0,
+	'tooltip': {
+		'dynamic': 0,
+		'shouldHide': 0
+	}
+};
 
 Game.getDynamicTooltip=function(func,origin,isCrate)
 {
@@ -636,7 +643,7 @@ M.launch=function()
 
 		M.dropUpgrade=function(upgrade,rate)
 		{
-			if (!Game.Has(upgrade) && Math.random()<=rate*Game.dropRateMult()*(Game.HasAchiev('Seedless to nay')?1.05:1))
+			if (!Game.Has(upgrade) && Math.random()<=rate*Game.dropRateMult()*(Game.seedlessToNay?1.05:1))
 			{
 				Game.Unlock(upgrade);
 			}
@@ -645,7 +652,7 @@ M.launch=function()
 		M.computeMatures=function()
 		{
 			var mult=1;
-			if (Game.HasAchiev('Seedless to nay')) mult=0.95;
+			if (Game.seedlessToNay) mult=0.95;
 			for (var i in M.plants)
 			{
 				M.plants[i].mature=M.plants[i].matureBase*mult;
@@ -1120,8 +1127,8 @@ M.launch=function()
 
 		M.getCost=function(me)
 		{
-			if (Game.Has('Turbo-charged soil')) return 0;
-			return Math.max(me.costM,Game.cookiesPs*me.cost*60)*(Game.HasAchiev('Seedless to nay')?0.95:1);
+			if (Game.turboSoil) return 0;
+			return Math.max(me.costM,Game.cookiesPs*me.cost*60)*(Game.seedlessToNay?0.95:1);
 		}
 
 		M.getPlantDesc=function(me)
@@ -1137,7 +1144,7 @@ M.launch=function()
 					{
 						var it=M.plants[me.children[i]];
 						if (it.unlocked) children+='<div class="gardenSeedTiny" style="background-position:'+(-0*48)+'px '+(-it.icon*48)+'px;"></div>';
-						else children+='<div class="gardenSeedTiny" style="background-image:url(img/icons.png?v=2.029);background-position:'+(-0*48)+'px '+(-7*48)+'px;opacity:0.35;"></div>';
+						else children+='<div class="gardenSeedTiny" style="background-image:https://orteil.dashnet.org/cookieclicker/img/icons.png?v=2.029);background-position:'+(-0*48)+'px '+(-7*48)+'px;opacity:0.35;"></div>';
 					}
 				}
 				children+='</div>';
@@ -1178,7 +1185,7 @@ M.launch=function()
 				var str='<div style="padding:8px 4px;min-width:350px;">'+
 					(M.parent.amount<me.req?(
 						'<div style="text-align:center;">Soil unlocked at '+me.req+' farms.</div>'
-					):('<div class="icon" style="background:url(img/gardenPlants.png?v=2.029);float:left;margin-left:-8px;margin-top:-8px;background-position:'+(-me.icon*48)+'px '+(-34*48)+'px;"></div>'+
+					):('<div class="icon" style="background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);float:left;margin-left:-8px;margin-top:-8px;background-position:'+(-me.icon*48)+'px '+(-34*48)+'px;"></div>'+
 					'<div><div class="name">'+me.name+'</div><div><small>'+((M.soil==me.id)?'Your field is currently using this soil.':(M.nextSoil>Date.now())?'You will be able to change your soil again in '+Game.sayTime((M.nextSoil-Date.now())/1000*30+30,-1)+'.':'Click to use this type of soil for your whole field.')+'</small></div></div>'+
 					'<div class="line"></div>'+
 					'<div class="description">'+
@@ -1195,9 +1202,9 @@ M.launch=function()
 			return function(){
 				var me=M.plantsById[id];
 				var str='<div style="padding:8px 4px;min-width:400px;">'+
-					'<div class="icon" style="background:url(img/gardenPlants.png?v=2.029);float:left;margin-left:-24px;margin-top:-4px;background-position:'+(-0*48)+'px '+(-me.icon*48)+'px;"></div>'+
-					'<div class="icon" style="background:url(img/gardenPlants.png?v=2.029);float:left;margin-left:-24px;margin-top:-28px;background-position:'+(-4*48)+'px '+(-me.icon*48)+'px;"></div>'+
-					'<div style="background:url(img/turnInto.png);width:20px;height:22px;position:absolute;left:28px;top:24px;z-index:1000;"></div>'+
+					'<div class="icon" style="background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);float:left;margin-left:-24px;margin-top:-4px;background-position:'+(-0*48)+'px '+(-me.icon*48)+'px;"></div>'+
+					'<div class="icon" style="background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);float:left;margin-left:-24px;margin-top:-28px;background-position:'+(-4*48)+'px '+(-me.icon*48)+'px;"></div>'+
+					'<div style="background:https://orteil.dashnet.org/cookieclicker/img/turnInto.png);width:20px;height:22px;position:absolute;left:28px;top:24px;z-index:1000;"></div>'+
 					(me.plantable?('<div style="float:right;text-align:right;width:100px;"><small>Planting cost :</small><br><span class="price'+(M.canPlant(me)?'':' disabled')+'">'+Beautify(Math.round(shortenNumber(M.getCost(me))))+'</span><br><small>'+Game.sayTime(me.cost*60*30,-1)+' of CpS,<br>minimum '+Beautify(me.costM)+' cookies</small></div>'):'')+
 					'<div style="width:300px;"><div class="name">'+me.name+' seed</div><div><small>'+(me.plantable?'Click to select this seed for planting.':'<span class="red">This seed cannot be planted.</span>')+'<br>Shift+ctrl+click to harvest all mature plants of this type.</small></div></div>'+
 					'<div class="line"></div>'+
@@ -1212,7 +1219,7 @@ M.launch=function()
 				var me=M.toolsById[id];
 				var icon=[me.icon,35];
 				var str='<div style="padding:8px 4px;min-width:350px;">'+
-					'<div class="icon" style="background:url(img/gardenPlants.png?v=2.029);float:left;margin-left:-8px;margin-top:-8px;background-position:'+(-icon[0]*48)+'px '+(-icon[1]*48)+'px;"></div>'+
+					'<div class="icon" style="background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);float:left;margin-left:-8px;margin-top:-8px;background-position:'+(-icon[0]*48)+'px '+(-icon[1]*48)+'px;"></div>'+
 					'<div><div class="name">'+me.name+'</div></div>'+
 					'<div class="line"></div>'+
 					'<div class="description">'+
@@ -1254,16 +1261,16 @@ M.launch=function()
 					else stage=1;
 					var icon=[stage,me.icon];
 					var str='<div style="padding:8px 4px;min-width:350px;">'+
-						'<div class="icon" style="background:url(img/gardenPlants.png?v=2.029);float:left;margin-left:-8px;margin-top:-8px;background-position:'+(-icon[0]*48)+'px '+(-icon[1]*48)+'px;"></div>'+
+						'<div class="icon" style="background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);float:left;margin-left:-8px;margin-top:-8px;background-position:'+(-icon[0]*48)+'px '+(-icon[1]*48)+'px;"></div>'+
 						'<div class="name">'+me.name+'</div><div><small>This plant is growing here.</small></div>'+
 						'<div class="line"></div>'+
 						'<div style="text-align:center;">'+
 							'<div style="display:inline-block;position:relative;box-shadow:0px 0px 0px 1px #000,0px 0px 0px 1px rgba(255,255,255,0.5) inset,0px -2px 2px 0px rgba(255,255,255,0.5) inset;width:256px;height:6px;background:linear-gradient(to right,#fff 0%,#0f9 '+me.mature+'%,#3c0 '+(me.mature+0.1)+'%,#960 100%)">'+
 								'<div class="gardenGrowthIndicator" style="left:'+Math.floor((tile[1]/100)*256)+'px;"></div>'+
-								'<div style="background:url(img/gardenPlants.png?v=2.029);background-position:'+(-1*48)+'px '+(-icon[1]*48)+'px;position:absolute;left:'+(0-24)+'px;top:-32px;transform:scale(0.5,0.5);width:48px;height:48px;"></div>'+
-								'<div style="background:url(img/gardenPlants.png?v=2.029);background-position:'+(-2*48)+'px '+(-icon[1]*48)+'px;position:absolute;left:'+((((me.mature*0.333)/100)*256)-24)+'px;top:-32px;transform:scale(0.5,0.5);width:48px;height:48px;"></div>'+
-								'<div style="background:url(img/gardenPlants.png?v=2.029);background-position:'+(-3*48)+'px '+(-icon[1]*48)+'px;position:absolute;left:'+((((me.mature*0.666)/100)*256)-24)+'px;top:-32px;transform:scale(0.5,0.5);width:48px;height:48px;"></div>'+
-								'<div style="background:url(img/gardenPlants.png?v=2.029);background-position:'+(-4*48)+'px '+(-icon[1]*48)+'px;position:absolute;left:'+((((me.mature)/100)*256)-24)+'px;top:-32px;transform:scale(0.5,0.5);width:48px;height:48px;"></div>'+
+								'<div style="background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);background-position:'+(-1*48)+'px '+(-icon[1]*48)+'px;position:absolute;left:'+(0-24)+'px;top:-32px;transform:scale(0.5,0.5);width:48px;height:48px;"></div>'+
+								'<div style="background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);background-position:'+(-2*48)+'px '+(-icon[1]*48)+'px;position:absolute;left:'+((((me.mature*0.333)/100)*256)-24)+'px;top:-32px;transform:scale(0.5,0.5);width:48px;height:48px;"></div>'+
+								'<div style="background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);background-position:'+(-3*48)+'px '+(-icon[1]*48)+'px;position:absolute;left:'+((((me.mature*0.666)/100)*256)-24)+'px;top:-32px;transform:scale(0.5,0.5);width:48px;height:48px;"></div>'+
+								'<div style="background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);background-position:'+(-4*48)+'px '+(-icon[1]*48)+'px;position:absolute;left:'+((((me.mature)/100)*256)-24)+'px;top:-32px;transform:scale(0.5,0.5);width:48px;height:48px;"></div>'+
 							'</div><br>'+
 							'<b>Stage :</b> '+['bud','sprout','bloom','mature'][stage-1]+'<br>'+
 							'<small>'+(stage==1?'Plant effects : 10%':stage==2?'Plant effects : 25%':stage==3?'Plant effects : 50%':'Plant effects : 100%; may reproduce, will drop seed when harvested')+'</small>'+
@@ -1379,7 +1386,7 @@ M.launch=function()
 				AddEvent(l('gardenSoil-'+me.id),'click',function(me){return function(){
 					if (M.freeze || M.soil==me.id || M.nextSoil>Date.now() || M.parent.amount<me.req){return false;}
 					PlaySound('snd/toneTick.mp3');
-					M.nextSoil=Date.now()+(Game.Has('Turbo-charged soil')?1:(1000*60*10));
+					M.nextSoil=Date.now()+(Game.turboSoil?1:(1000*60*10));
 					M.toCompute=true;M.soil=me.id;M.computeStepT();
 					for (var i in M.soils){var it=M.soils[i];if (it.id==M.soil){l('gardenSoil-'+it.id).classList.add('on');}else{l('gardenSoil-'+it.id).classList.remove('on');}}
 				}}(me));
@@ -1519,7 +1526,7 @@ M.launch=function()
 
 		M.computeStepT=function()
 		{
-			if (Game.Has('Turbo-charged soil')) M.stepT=1;
+			if (Game.turboSoil) M.stepT=1;
 			else M.stepT=M.soilsById[M.soil].tick*60;
 		}
 
@@ -1617,7 +1624,7 @@ M.launch=function()
 
 		var str='';
 		str+='<style>'+
-		'#gardenBG{background:url(img/shadedBorders.png),url(img/BGgarden.jpg);background-size:100% 100%,auto;position:absolute;left:0px;right:0px;top:0px;bottom:16px;}'+
+		'#gardenBG{background:https://orteil.dashnet.org/cookieclicker/img/shadedBorders.png),https://orteil.dashnet.org/cookieclicker/img/BGgarden.jpg);background-size:100% 100%,auto;position:absolute;left:0px;right:0px;top:0px;bottom:16px;}'+
 		'#gardenContent{position:relative;box-sizing:border-box;padding:4px 24px;height:'+(6*M.tileSize+16+48+48)+'px;}'+
 		'.gardenFrozen{box-shadow:0px 0px 16px rgba(255,255,255,1) inset,0px 0px 48px 24px rgba(200,255,225,0.5) inset;}'+
 		'#gardenPanel{text-align:center;margin:0px;padding:0px;position:absolute;left:4px;top:4px;bottom:4px;right:65%;overflow-y:auto;overflow-x:hidden;box-shadow:8px 0px 8px rgba(0,0,0,0.5);}'+
@@ -1627,24 +1634,24 @@ M.launch=function()
 		'.gardenTile{cursor:pointer;width:'+M.tileSize+'px;height:'+M.tileSize+'px;position:absolute;}'+
 		//'.gardenTile:before{transform:translate(0,0);pointer-events:none;content:\'\';display:block;position:absolute;left:0px;top:0px;right:0px;bottom:0px;margin:6px;border-radius:12px;background:rgba(0,0,0,0.1);box-shadow:0px 0px 4px rgba(255,255,255,0.2),-4px 4px 4px 2px rgba(0,0,0,0.2) inset;}'+
 		//'.gardenTile:hover:before{margin:2px;animation:wobble 0.5s;}'+
-		'.gardenTile:before{transform:translate(0,0);opacity:0.65;transition:opacity 0.2s;pointer-events:none;content:\'\';display:block;position:absolute;left:0px;top:0px;right:0px;bottom:0px;margin:0px;background:url(img/gardenPlots.png);}'+
+		'.gardenTile:before{transform:translate(0,0);opacity:0.65;transition:opacity 0.2s;pointer-events:none;content:\'\';display:block;position:absolute;left:0px;top:0px;right:0px;bottom:0px;margin:0px;background:https://orteil.dashnet.org/cookieclicker/img/gardenPlots.png);}'+
 			'.gardenTile:nth-child(4n+1):before{background-position:40px 0px;}'+
 			'.gardenTile:nth-child(4n+2):before{background-position:80px 0px;}'+
 			'.gardenTile:nth-child(4n+3):before{background-position:120px 0px;}'+
 			'.gardenTile:hover:before{opacity:1;animation:wobble 0.5s;}'+
 			'.noFancy .gardenTile:hover:before{opacity:1;animation:none;}'+
-		'.gardenTileIcon{transform:translate(0,0);pointer-events:none;transform-origin:50% 40px;width:48px;height:48px;position:absolute;left:-'+((48-M.tileSize)/2)+'px;top:-'+((48-M.tileSize)/2+8)+'px;background:url(img/gardenPlants.png?v=2.029);}'+
+		'.gardenTileIcon{transform:translate(0,0);pointer-events:none;transform-origin:50% 40px;width:48px;height:48px;position:absolute;left:-'+((48-M.tileSize)/2)+'px;top:-'+((48-M.tileSize)/2+8)+'px;background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);}'+
 			'.gardenTile:hover .gardenTileIcon{animation:pucker 0.3s;}'+
 			'.noFancy .gardenTile:hover .gardenTileIcon{animation:none;}'+
 		'#gardenDrag{pointer-events:none;position:absolute;left:0px;top:0px;right:0px;bottom:0px;overflow:hidden;z-index:1000000001;}'+
-		'#gardenCursor{transition:transform 0.1s;display:none;pointer-events:none;width:48px;height:48px;position:absolute;background:url(img/gardenPlants.png?v=2.029);}'+
+		'#gardenCursor{transition:transform 0.1s;display:none;pointer-events:none;width:48px;height:48px;position:absolute;background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);}'+
 		'.gardenSeed{cursor:pointer;display:inline-block;width:40px;height:40px;position:relative;}'+
 		'.gardenSeed.locked{display:none;}'+
-		'.gardenSeedIcon{pointer-events:none;transform:translate(0,0);display:inline-block;position:absolute;left:-4px;top:-4px;width:48px;height:48px;background:url(img/gardenPlants.png?v=2.029);}'+
+		'.gardenSeedIcon{pointer-events:none;transform:translate(0,0);display:inline-block;position:absolute;left:-4px;top:-4px;width:48px;height:48px;background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);}'+
 			'.gardenSeed:hover .gardenSeedIcon{animation:bounce 0.8s;z-index:1000000001;}'+
 			'.gardenSeed:active .gardenSeedIcon{animation:pucker 0.2s;}'+
 			'.noFancy .gardenSeed:hover .gardenSeedIcon,.noFancy .gardenSeed:active .gardenSeedIcon{animation:none;}'+
-		'.gardenPanelLabel{font-size:12px;width:100%;padding:2px;margin-top:4px;margin-bottom:-4px;}'+'.gardenSeedTiny{transform:scale(0.5,0.5);margin:-20px -16px;display:inline-block;width:48px;height:48px;background:url(img/gardenPlants.png?v=2.029);}'+
+		'.gardenPanelLabel{font-size:12px;width:100%;padding:2px;margin-top:4px;margin-bottom:-4px;}'+'.gardenSeedTiny{transform:scale(0.5,0.5);margin:-20px -16px;display:inline-block;width:48px;height:48px;background:https://orteil.dashnet.org/cookieclicker/img/gardenPlants.png?v=2.029);}'+
 		'.gardenSeed.on:before{pointer-events:none;content:\'\';display:block;position:absolute;left:0px;top:0px;right:0px;bottom:0px;margin:-2px;border-radius:12px;transform:rotate(45deg);background:rgba(0,0,0,0.2);box-shadow:0px 0px 8px rgba(255,255,255,0.75);}'+
 
 		'.gardenGrowthIndicator{background:#000;box-shadow:0px 0px 0px 1px #fff,0px 0px 0px 2px #000,2px 2px 2px 2px rgba(0,0,0,0.5);position:absolute;top:0px;width:1px;height:6px;z-index:100;}'+

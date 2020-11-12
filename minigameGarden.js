@@ -17,13 +17,43 @@ var Game={
 var M={
 	'parent': {
 		'id': 2,
-		'level': 4
+		'level': 10
 	},
 };
+
+//display bars with http://codepen.io/anon/pen/waGyEJ
+Game.effs={};
+Game.eff=function(name,def){if (typeof Game.effs[name]==='undefined') return (typeof def==='undefined'?1:def); else return Game.effs[name];};
+
+Game.auraMult=function(what)
+{
+	var n=0;
+	// if (Game.dragonAuras[Game.dragonAura].name==what || Game.dragonAuras[Game.dragonAura2].name==what) n=1;
+	// if (Game.dragonAuras[Game.dragonAura].name=='Reality Bending' || Game.dragonAuras[Game.dragonAura2].name=='Reality Bending') n+=0.1;
+	return n;
+}
+
+Game.dropRateMult=function()
+{
+	var rate=1;
+	if (Game.Has('Green yeast digestives')) rate*=1.03;
+	if (Game.Has('Dragon teddy bear')) rate*=1.03;
+	rate*=Game.eff('itemDrops');
+	//if (Game.hasAura('Mind Over Matter')) rate*=1.25;
+	rate*=1+Game.auraMult('Mind Over Matter')*0.25;
+	if (Game.Has('Santa\'s bottomless bag')) rate*=1.1;
+	if (Game.Has('Cosmic beginner\'s luck') && !Game.Has('Heavenly chip secret')) rate*=5;
+	return rate;
+}
 
 Game.Spend=function(howmuch)
 {
 	Game.cookies-=howmuch;
+}
+Game.Earn=function(howmuch)
+{
+	Game.cookies+=howmuch;
+	Game.cookiesEarned+=howmuch;
 }
 
 //display sparkles at a set position
@@ -2367,13 +2397,16 @@ M.launch=function()
 	}
 	M.logic=function()
 	{
+		Game.bounds=l('game').getBoundingClientRect();
+
 		//run each frame
 		var now=Date.now();
 
 		if (!M.freeze)
 		{
 			M.nextStep=Math.min(M.nextStep,now+(M.stepT)*1000);
-			if (now>=M.nextStep)
+			// if (now>=M.nextStep)
+			if (1 == 1)
 			{
 				M.computeStepT();
 				M.nextStep=now+M.stepT*1000;
@@ -2542,3 +2575,595 @@ M.launch=function()
 
 M.launch();
 M.reset(true);
+
+/*=====================================================================================
+UPGRADES
+=======================================================================================*/
+Game.upgradesToRebuild=1;
+Game.Upgrades=[];
+Game.UpgradesById=[];
+Game.UpgradesN=0;
+Game.UpgradesInStore=[];
+Game.UpgradesOwned=0;
+Game.Upgrade=function(name,desc,price,icon,buyFunction)
+{
+	this.id=Game.UpgradesN;
+	this.name=name;
+	this.desc=desc;
+	this.baseDesc=this.desc;
+	this.desc=BeautifyInText(this.baseDesc);
+	this.basePrice=price;
+	this.priceLumps=0;//note : doesn't do much on its own, you still need to handle the buying yourself
+	this.icon=icon;
+	this.iconFunction=0;
+	this.buyFunction=buyFunction;
+	/*this.unlockFunction=unlockFunction;
+	this.unlocked=(this.unlockFunction?0:1);*/
+	this.unlocked=0;
+	this.bought=0;
+	this.order=this.id;
+	if (order) this.order=order+this.id*0.001;
+	this.pool='';//can be '', cookie, toggle, debug, prestige, prestigeDecor, tech, or unused
+	if (pool) this.pool=pool;
+	this.power=0;
+	if (power) this.power=power;
+	this.vanilla=Game.vanilla;
+	this.unlockAt=0;
+	this.techUnlock=[];
+	this.parents=[];
+	this.type='upgrade';
+	this.tier=0;
+	this.buildingTie=0;//of what building is this a tiered upgrade of ?
+
+	Game.last=this;
+	Game.Upgrades[this.name]=this;
+	Game.UpgradesById[this.id]=this;
+	Game.UpgradesN++;
+	return this;
+}
+
+Game.Upgrade.prototype.getPrice=function()
+{
+	var price=this.basePrice;
+	if (this.priceFunc) price=this.priceFunc(this);
+	if (price==0) return 0;
+	if (this.pool!='prestige')
+	{
+		if (Game.Has('Toy workshop')) price*=0.95;
+		if (Game.Has('Five-finger discount')) price*=Math.pow(0.99,Game.Objects['Cursor'].amount/100);
+		if (Game.Has('Santa\'s dominion')) price*=0.98;
+		if (Game.Has('Faberge egg')) price*=0.99;
+		if (Game.Has('Divine sales')) price*=0.99;
+		if (Game.Has('Fortune #100')) price*=0.99;
+		if (this.kitten && Game.Has('Kitten wages')) price*=0.9;
+		if (Game.hasBuff('Haggler\'s luck')) price*=0.98;
+		if (Game.hasBuff('Haggler\'s misery')) price*=1.02;
+		//if (Game.hasAura('Master of the Armory')) price*=0.98;
+		price*=1-Game.auraMult('Master of the Armory')*0.02;
+		price*=Game.eff('upgradeCost');
+		if (this.pool=='cookie' && Game.Has('Divine bakeries')) price/=5;
+	}
+	return Math.ceil(price);
+}
+
+Game.Upgrade.prototype.canBuy=function()
+{
+	if (this.canBuyFunc) return this.canBuyFunc();
+	if (Game.cookies>=this.getPrice()) return true; else return false;
+}
+
+Game.storeBuyAll=function()
+{
+	if (!Game.Has('Inspired checklist')) return false;
+	for (var i in Game.UpgradesInStore)
+	{
+		var me=Game.UpgradesInStore[i];
+		if (!me.isVaulted() && me.pool!='toggle' && me.pool!='tech') me.buy(1);
+	}
+}
+
+Game.vault=[];
+Game.Upgrade.prototype.isVaulted=function()
+{
+	if (Game.vault.indexOf(this.id)!=-1) return true; else return false;
+}
+Game.Upgrade.prototype.vault=function()
+{
+	if (!this.isVaulted()) Game.vault.push(this.id);
+}
+Game.Upgrade.prototype.unvault=function()
+{
+	if (this.isVaulted()) Game.vault.splice(Game.vault.indexOf(this.id),1);
+}
+
+Game.Upgrade.prototype.click=function(e)
+{
+	if ((e && e.shiftKey) || Game.keys[16])
+	{
+		if (this.pool=='toggle' || this.pool=='tech') {}
+		else if (Game.Has('Inspired checklist'))
+		{
+			if (this.isVaulted()) this.unvault();
+			else this.vault();
+			Game.upgradesToRebuild=1;
+			PlaySound('snd/tick.mp3');
+		}
+	}
+	else this.buy();
+}
+
+
+Game.Upgrade.prototype.buy=function(bypass)
+{
+	var success=0;
+	var cancelPurchase=0;
+	if (this.clickFunction && !bypass) cancelPurchase=!this.clickFunction();
+	if (!cancelPurchase)
+	{
+		if (this.choicesFunction)
+		{
+			if (Game.choiceSelectorOn==this.id)
+			{
+				l('toggleBox').style.display='none';
+				l('toggleBox').innerHTML='';
+				Game.choiceSelectorOn=-1;
+				PlaySound('snd/tick.mp3');
+			}
+			else
+			{
+				Game.choiceSelectorOn=this.id;
+				var choices=this.choicesFunction();
+				if (choices.length>0)
+				{
+					var selected=0;
+					for (var i in choices) {if (choices[i].selected) selected=i;}
+					Game.choiceSelectorChoices=choices;//this is a really dumb way of doing this i am so sorry
+					Game.choiceSelectorSelected=selected;
+					var str='';
+					str+='<div class="close" onclick="Game.UpgradesById['+this.id+'].buy();">x</div>';
+					str+='<h3>'+this.name+'</h3>'+
+					'<div class="line"></div>'+
+					'<h4 id="choiceSelectedName">'+choices[selected].name+'</h4>'+
+					'<div class="line"></div>';
+
+					for (var i in choices)
+					{
+						choices[i].id=i;
+						choices[i].order=choices[i].order||0;
+					}
+
+					var sortMap=function(a,b)
+					{
+						if (a.order>b.order) return 1;
+						else if (a.order<b.order) return -1;
+						else return 0;
+					}
+					choices.sort(sortMap);
+
+					for (var i=0;i<choices.length;i++)
+					{
+						if (!choices[i]) continue;
+						var icon=choices[i].icon;
+						var id=choices[i].id;
+						if (choices[i].div) str+='<div class="line"></div>';
+						str+='<div class="crate enabled'+(id==selected?' highlighted':'')+'" style="opacity:1;float:none;display:inline-block;'+(icon[2]?'background-image:url('+icon[2]+');':'')+'background-position:'+(-icon[0]*48)+'px '+(-icon[1]*48)+'px;" '+Game.clickStr+'="Game.UpgradesById['+this.id+'].choicesPick('+id+');PlaySound(\'snd/tick.mp3\');Game.choiceSelectorOn=-1;Game.UpgradesById['+this.id+'].buy();" onMouseOut="l(\'choiceSelectedName\').innerHTML=Game.choiceSelectorChoices[Game.choiceSelectorSelected].name;" onMouseOver="l(\'choiceSelectedName\').innerHTML=Game.choiceSelectorChoices['+i+'].name;"'+
+						'></div>';
+					}
+				}
+				l('toggleBox').innerHTML=str;
+				l('toggleBox').style.display='block';
+				l('toggleBox').focus();
+				Game.tooltip.hide();
+				PlaySound('snd/tick.mp3');
+				success=1;
+			}
+		}
+		else if (this.pool!='prestige')
+		{
+			var price=this.getPrice();
+			if (this.canBuy() && !this.bought)
+			{
+				Game.Spend(price);
+				this.bought=1;
+				if (this.buyFunction) this.buyFunction();
+				if (this.toggleInto)
+				{
+					Game.Lock(this.toggleInto);
+					Game.Unlock(this.toggleInto);
+				}
+				Game.upgradesToRebuild=1;
+				Game.recalculateGains=1;
+				if (Game.CountsAsUpgradeOwned(this.pool)) Game.UpgradesOwned++;
+				Game.setOnCrate(0);
+				Game.tooltip.hide();
+				PlaySound('snd/buy'+choose([1,2,3,4])+'.mp3',0.75);
+				success=1;
+			}
+		}
+		else
+		{
+			var price=this.getPrice();
+			if (Game.heavenlyChips>=price && !this.bought)
+			{
+				Game.heavenlyChips-=price;
+				Game.heavenlyChipsSpent+=price;
+				this.unlocked=1;
+				this.bought=1;
+				if (this.buyFunction) this.buyFunction();
+				Game.BuildAscendTree();
+				PlaySound('snd/buy'+choose([1,2,3,4])+'.mp3',0.75);
+				PlaySound('snd/shimmerClick.mp3');
+				//PlaySound('snd/buyHeavenly.mp3');
+				success=1;
+			}
+		}
+	}
+	if (this.bought && this.activateFunction) this.activateFunction();
+	return success;
+}
+Game.Upgrade.prototype.earn=function()//just win the upgrades without spending anything
+{
+	this.unlocked=1;
+	this.bought=1;
+	if (this.buyFunction) this.buyFunction();
+	Game.upgradesToRebuild=1;
+	Game.recalculateGains=1;
+	if (Game.CountsAsUpgradeOwned(this.pool)) Game.UpgradesOwned++;
+}
+Game.Upgrade.prototype.unearn=function()//remove the upgrade, but keep it unlocked
+{
+	this.bought=0;
+	Game.upgradesToRebuild=1;
+	Game.recalculateGains=1;
+	if (Game.CountsAsUpgradeOwned(this.pool)) Game.UpgradesOwned--;
+}
+Game.Upgrade.prototype.unlock=function()
+{
+	this.unlocked=1;
+	Game.upgradesToRebuild=1;
+}
+Game.Upgrade.prototype.lose=function()
+{
+	this.unlocked=0;
+	this.bought=0;
+	Game.upgradesToRebuild=1;
+	Game.recalculateGains=1;
+	if (Game.CountsAsUpgradeOwned(this.pool)) Game.UpgradesOwned--;
+}
+Game.Upgrade.prototype.toggle=function()//cheating only
+{
+	if (!this.bought)
+	{
+		this.bought=1;
+		if (this.buyFunction) this.buyFunction();
+		Game.upgradesToRebuild=1;
+		Game.recalculateGains=1;
+		if (Game.CountsAsUpgradeOwned(this.pool)) Game.UpgradesOwned++;
+		PlaySound('snd/buy'+choose([1,2,3,4])+'.mp3',0.75);
+		if (this.pool=='prestige' || this.pool=='debug') PlaySound('snd/shimmerClick.mp3');
+	}
+	else
+	{
+		this.bought=0;
+		Game.upgradesToRebuild=1;
+		Game.recalculateGains=1;
+		if (Game.CountsAsUpgradeOwned(this.pool)) Game.UpgradesOwned--;
+		PlaySound('snd/sell'+choose([1,2,3,4])+'.mp3',0.75);
+		if (this.pool=='prestige' || this.pool=='debug') PlaySound('snd/shimmerClick.mp3');
+	}
+	if (Game.onMenu=='stats') Game.UpdateMenu();
+}
+
+Game.CountsAsUpgradeOwned=function(pool)
+{
+	if (pool=='' || pool=='cookie' || pool=='tech') return true; else return false;
+}
+
+/*AddEvent(l('toggleBox'),'blur',function()//if we click outside of the selector, close it
+	{
+		//this has a couple problems, such as when clicking on the upgrade - this toggles it off and back on instantly
+		l('toggleBox').style.display='none';
+		l('toggleBox').innerHTML='';
+		Game.choiceSelectorOn=-1;
+	}
+);*/
+
+Game.RequiresConfirmation=function(upgrade,prompt)
+{
+	upgrade.clickFunction=function(){Game.Prompt(prompt,[['Yes','Game.UpgradesById['+upgrade.id+'].buy(1);Game.ClosePrompt();'],'No']);return false;};
+}
+
+Game.Unlock=function(what)
+{
+	if (typeof what==='string')
+	{
+		if (Game.Upgrades[what])
+		{
+			if (Game.Upgrades[what].unlocked==0)
+			{
+				Game.Upgrades[what].unlocked=1;
+				Game.upgradesToRebuild=1;
+				Game.recalculateGains=1;
+				/*if (Game.prefs.popups) {}
+				else Game.Notify('Upgrade unlocked','<div class="title" style="font-size:18px;margin-top:-2px;">'+Game.Upgrades[what].name+'</div>',Game.Upgrades[what].icon,6);*/
+			}
+		}
+	}
+	else {for (var i in what) {Game.Unlock(what[i]);}}
+}
+Game.Lock=function(what)
+{
+	if (typeof what==='string')
+	{
+		if (Game.Upgrades[what])
+		{
+			Game.Upgrades[what].unlocked=0;
+			Game.upgradesToRebuild=1;
+			if (Game.Upgrades[what].bought==1 && Game.CountsAsUpgradeOwned(Game.Upgrades[what].pool)) Game.UpgradesOwned--;
+			Game.Upgrades[what].bought=0;
+			Game.recalculateGains=1;
+		}
+	}
+	else {for (var i in what) {Game.Lock(what[i]);}}
+}
+
+Game.Has=function(what)
+{
+	var it=Game.Upgrades[what];
+	if (Game.ascensionMode==1 && (it.pool=='prestige' || it.tier=='fortune')) return 0;
+	return (it?it.bought:0);
+}
+Game.HasUnlocked=function(what)
+{
+	return (Game.Upgrades[what]?Game.Upgrades[what].unlocked:0);
+}
+
+/*=====================================================================================
+PARTICLES
+=======================================================================================*/
+//generic particles (falling cookies etc)
+//only displayed on left section
+Game.particles=[];
+Game.particlesN=50;
+for (var i=0;i<Game.particlesN;i++)
+{
+	Game.particles[i]={x:0,y:0,xd:0,yd:0,w:64,h:64,z:0,size:1,dur:2,life:-1,r:0,pic:'smallCookies.png',picId:0,picPos:[0,0]};
+}
+
+Game.particlesUpdate=function()
+{
+	for (var i=0;i<Game.particlesN;i++)
+	{
+		var me=Game.particles[i];
+		if (me.life!=-1)
+		{
+			if (!me.text) me.yd+=0.2+Math.random()*0.1;
+			me.x+=me.xd;
+			me.y+=me.yd;
+			//me.y+=me.life*0.25+Math.random()*0.25;
+			me.life++;
+			if (me.life>=Game.fps*me.dur)
+			{
+				me.life=-1;
+			}
+		}
+	}
+}
+Game.particleAdd=function(x,y,xd,yd,size,dur,z,pic,text)
+{
+	//Game.particleAdd(pos X,pos Y,speed X,speed Y,size (multiplier),duration (seconds),layer,picture,text);
+	//pick the first free (or the oldest) particle to replace it
+	if (1 || Game.prefs.particles)
+	{
+		var highest=0;
+		var highestI=0;
+		for (var i=0;i<Game.particlesN;i++)
+		{
+			if (Game.particles[i].life==-1) {highestI=i;break;}
+			if (Game.particles[i].life>highest)
+			{
+				highest=Game.particles[i].life;
+				highestI=i;
+			}
+		}
+		var auto=0;
+		if (x) auto=1;
+		var i=highestI;
+		var x=x||-64;
+		if (Game.LeftBackground && !auto) x=Math.floor(Math.random()*Game.LeftBackground.canvas.width);
+		var y=y||-64;
+		var me=Game.particles[i];
+		me.life=0;
+		me.x=x;
+		me.y=y;
+		me.xd=xd||0;
+		me.yd=yd||0;
+		me.size=size||1;
+		me.z=z||0;
+		me.dur=dur||2;
+		me.r=Math.floor(Math.random()*360);
+		me.picId=Math.floor(Math.random()*10000);
+		if (!pic)
+		{
+			if (Game.season=='fools') pic='smallDollars.png';
+			else
+			{
+				var cookies=[[10,0]];
+				for (var i in Game.Upgrades)
+				{
+					var cookie=Game.Upgrades[i];
+					if (cookie.bought>0 && cookie.pool=='cookie') cookies.push(cookie.icon);
+				}
+				me.picPos=choose(cookies);
+				if (Game.bakeryName.toLowerCase()=='ortiel' || Math.random()<1/10000) me.picPos=[17,5];
+				pic='icons.png';
+			}
+		}
+		else if (pic!=='string'){me.picPos=pic;pic='icons.png';}
+		me.pic=pic||'smallCookies.png';
+		me.text=text||0;
+		return me;
+	}
+	return {};
+}
+Game.particlesDraw=function(z)
+{
+	var ctx=Game.LeftBackground;
+	ctx.fillStyle='#fff';
+	ctx.font='20px Merriweather';
+	ctx.textAlign='center';
+
+	for (var i=0;i<Game.particlesN;i++)
+	{
+		var me=Game.particles[i];
+		if (me.z==z)
+		{
+			if (me.life!=-1)
+			{
+				var opacity=1-(me.life/(Game.fps*me.dur));
+				ctx.globalAlpha=opacity;
+				if (me.text)
+				{
+					ctx.fillText(me.text,me.x,me.y);
+				}
+				else
+				{
+					ctx.save();
+					ctx.translate(me.x,me.y);
+					ctx.rotate((me.r/360)*Math.PI*2);
+					var w=64;
+					var h=64;
+					if (me.pic=='icons.png')
+					{
+						w=48;
+						h=48;
+						ctx.drawImage(Pic(me.pic),me.picPos[0]*w,me.picPos[1]*h,w,h,-w/2*me.size,-h/2*me.size,w*me.size,h*me.size);
+					}
+					else
+					{
+						if (me.pic=='wrinklerBits.png' || me.pic=='shinyWrinklerBits.png') {w=100;h=200;}
+						ctx.drawImage(Pic(me.pic),(me.picId%8)*w,0,w,h,-w/2*me.size,-h/2*me.size,w*me.size,h*me.size);
+					}
+					ctx.restore();
+				}
+			}
+		}
+	}
+}
+
+//text particles (popups etc)
+Game.textParticles=[];
+Game.textParticlesY=0;
+var str='';
+for (var i=0;i<20;i++)
+{
+	Game.textParticles[i]={x:0,y:0,life:-1,text:''};
+	str+='<div id="particle'+i+'" class="particle title"></div>';
+}
+l('particles').innerHTML=str;
+Game.textParticlesUpdate=function()
+{
+	for (var i in Game.textParticles)
+	{
+		var me=Game.textParticles[i];
+		if (me.life!=-1)
+		{
+			me.life++;
+			if (me.life>=Game.fps*4)
+			{
+				var el=me.l;
+				me.life=-1;
+				el.style.opacity=0;
+				el.style.display='none';
+			}
+		}
+	}
+}
+Game.textParticlesAdd=function(text,el,posX,posY)
+{
+	//pick the first free (or the oldest) particle to replace it
+	var highest=0;
+	var highestI=0;
+	for (var i in Game.textParticles)
+	{
+		if (Game.textParticles[i].life==-1) {highestI=i;break;}
+		if (Game.textParticles[i].life>highest)
+		{
+			highest=Game.textParticles[i].life;
+			highestI=i;
+		}
+	}
+	var i=highestI;
+	var noStack=0;
+	if (typeof posX!=='undefined' && typeof posY!=='undefined')
+	{
+		x=posX;
+		y=posY;
+		noStack=1;
+	}
+	else
+	{
+		var x=(Math.random()-0.5)*40;
+		var y=0;//+(Math.random()-0.5)*40;
+		if (!el)
+		{
+			var rect=Game.bounds;
+			var x=Math.floor((rect.left+rect.right)/2);
+			var y=Math.floor((rect.bottom))-(Game.mobile*64);
+			x+=(Math.random()-0.5)*40;
+			y+=0;//(Math.random()-0.5)*40;
+		}
+	}
+	if (!noStack) y-=Game.textParticlesY;
+
+	x=Math.max(Game.bounds.left+200,x);
+	x=Math.min(Game.bounds.right-200,x);
+	y=Math.max(Game.bounds.top+32,y);
+
+	var me=Game.textParticles[i];
+	if (!me.l) me.l=l('particle'+i);
+	me.life=0;
+	me.x=x;
+	me.y=y;
+	me.text=text;
+	me.l.innerHTML=text;
+	me.l.style.left=Math.floor(Game.textParticles[i].x-200)+'px';
+	me.l.style.bottom=Math.floor(-Game.textParticles[i].y)+'px';
+	for (var ii in Game.textParticles)
+	{if (ii!=i) (Game.textParticles[ii].l||l('particle'+ii)).style.zIndex=100000000;}
+	me.l.style.zIndex=100000001;
+	me.l.style.display='block';
+	me.l.className='particle title';
+	void me.l.offsetWidth;
+	me.l.className='particle title risingUpLinger';
+	if (!noStack) Game.textParticlesY+=60;
+}
+Game.popups=1;
+Game.Popup=function(text,x,y)
+{
+	if (Game.popups) Game.textParticlesAdd(text,0,x,y);
+}
+
+//display sparkles at a set position
+Game.sparkles=l('sparkles');
+Game.sparklesT=0;
+Game.sparklesFrames=16;
+Game.SparkleAt=function(x,y)
+{
+	if (Game.blendModesOn)
+	{
+		Game.sparklesT=Game.sparklesFrames+1;
+		Game.sparkles.style.backgroundPosition='0px 0px';
+		Game.sparkles.style.left=Math.floor(x-64)+'px';
+		Game.sparkles.style.top=Math.floor(y-64)+'px';
+		Game.sparkles.style.display='block';
+	}
+}
+Game.SparkleOn=function(el)
+{
+	var rect=el.getBoundingClientRect();
+	Game.SparkleAt((rect.left+rect.right)/2,(rect.top+rect.bottom)/2-24);
+}
+
+Game.l=l('game');
+Game.bounds=0

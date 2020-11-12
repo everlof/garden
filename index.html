@@ -12,13 +12,22 @@
 </head>
 
 <body>
-  <div id="tooltipAnchor" style="left: 1023px; right: auto; top: 278px; bottom: auto; display: none; opacity: 1; visibility: visible;">
-    <div id="tooltip" class="framed" onmouseout="Game.tooltip.hide();" style="left: auto; top: auto; right: auto; bottom: auto;">
+  <div id="game" class="focusLeft noFancy noFilters extraButtons lumpsOn">
+    <div id="particles"></div>
+    <div id="sparkles" class="sparkles" style="background-position: -2048px 0px; left: 501px; top: 38px; display: none;"></div>
+    <div class="rowSpecial" id="rowSpecial2"></div>
+
+    <div id="tooltipAnchor" style="opacity: 1; display: none; visibility: visible; left: 217px; right: auto; top: 200px; bottom: auto;">
+      <div id="tooltip" class="framed" onmouseout="Game.tooltip.hide();" style="left: auto; top: auto; right: auto; bottom: auto;">
+        <div style="width:150px;text-align:center;font-size:11px;">
+          <b>Grandmas</b>
+          <div class="line"></div>
+          Click to unmute grandmas<br>(display this building)
+        </div>
+      </div>
     </div>
   </div>
-  <div id="sparkles" class="sparkles" style="background-position: -2048px 0px; left: 501px; top: 38px; display: none;"></div>
 
-    <div class="rowSpecial" id="rowSpecial2"></div>
     <!-- <script src="main.js"></script> -->
     <script src="minigameGarden.js"></script>
 </body>

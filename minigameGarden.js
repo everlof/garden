@@ -1,3 +1,15 @@
+const readlineSync = require('readline-sync');
+const readTextFile = require('read-text-file');
+const indexContents = readTextFile.readSync('index.html');
+
+const jsdom = require("jsdom");
+const { stdin, mainModule } = require("process");
+const { JSDOM } = jsdom;
+
+const dom = new JSDOM(indexContents);
+const window = dom.window;
+const document = dom.window.document;
+
 var Game={
 	'turboSoil': 0,
 	'seedlessToNay': 0,
@@ -11,7 +23,8 @@ var Game={
 	},
 	'prefs': {
 		'format': 0
-	}
+	},
+	'bounds': 0
 };
 
 var M={
@@ -21,7 +34,52 @@ var M={
 	},
 };
 
-//display bars with http://codepen.io/anon/pen/waGyEJ
+function main() {
+	M.launch();
+	M.reset(true);
+
+	while (true) {
+		M.logic()
+		M.dumpGarden();
+		console.log();
+		readlineSync.question(`[Ticks: ${M.tick}] Press enter for next tick\n`);
+	}
+}
+
+M.dumpGarden=function()
+{
+	for (var x = 0; x < M.plot.length; x++) {
+		process.stdout.write("| ");
+		for (var y = 0; y < M.plot[x].length; y++) {
+			const plantId = M.plot[x][y][0];
+			const lifespan = M.plot[x][y][1];
+
+			const plantIdString = plantId.toString().padStart(2, "0");
+			const lifespanString = lifespan.toString().padStart(3, "0") + "%";
+
+			if (plantId > 0) {
+				const plant = M.plantsById[plantId - 1];
+				const plantString = plant.name.padStart(23, "_");
+				if (y == M.plot[x].length - 1) {
+					process.stdout.write(`${plantString} (${lifespanString}) `);
+				} else {
+					process.stdout.write(`${plantString} (${lifespanString}), `);
+				}
+			} else {
+				const string = "_".toString().padStart(23, "_");
+				if (y == M.plot[x].length - 1) {
+					process.stdout.write(`${string} (${lifespanString}) `);
+				} else {
+					process.stdout.write(`${string} (${lifespanString}), `);
+				}
+			}
+		}
+		process.stdout.write("|\n");
+	}
+}
+
+
+
 Game.effs={};
 Game.eff=function(name,def){if (typeof Game.effs[name]==='undefined') return (typeof def==='undefined'?1:def); else return Game.effs[name];};
 
@@ -543,19 +601,6 @@ function AddEvent(html_element, event_name, event_function)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 M.launch=function()
 {
 	var M=this;
@@ -573,6 +618,7 @@ M.launch=function()
 			a plant's effects depend on how mature it is
 			a plant can only reproduce when mature
 		*/
+		M.tick=0;
 		M.plants={
 			'bakerWheat':{
 				name:'Baker\'s wheat',
@@ -2392,6 +2438,7 @@ M.launch=function()
 		M.buildPanel();
 		M.computeEffs();
 		M.toCompute=true;
+		M.tick=0;
 
 		setTimeout(function(M){return function(){M.onResize();}}(M),10);
 	}
@@ -2530,6 +2577,8 @@ M.launch=function()
 			if (M.seedSelected>-1) M.plantsById[M.seedSelected].l.classList.remove('on');
 			M.seedSelected=-1;
 		}
+
+		M.tick  += 1;
 	}
 	M.draw=function()
 	{
@@ -2572,9 +2621,6 @@ M.launch=function()
 	}
 	M.init(l('rowSpecial2'));
 }
-
-M.launch();
-M.reset(true);
 
 /*=====================================================================================
 UPGRADES
@@ -3166,4 +3212,4 @@ Game.SparkleOn=function(el)
 }
 
 Game.l=l('game');
-Game.bounds=0
+main();

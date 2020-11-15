@@ -10,7 +10,12 @@ https://cookieclicker.fandom.com/wiki/Garden
 
 `npm run start`
 
-Press enter to progress, each enter is 1 tick. Garden is printed each tick.
+How to play interactively:
+
+- enter -> next tick
+- p,0,1,2 -> plant `0` at `(1,2)`
+- h,1,2 -> harvest plant at `(1,2)`
+- a -> harvest all plants
 
 # Saves
 

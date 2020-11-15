@@ -41,16 +41,48 @@ state.totalNbrOfSeeds = function() { return M.plantsN; }
 state.ticks = function() { return M.tick; }
 state.plot = function() { return M.plot }
 
+// M.harvest=function(x,y,manual)
+// M.clickTile=function(x,y)
+// M.useTool=function(what,x,y)
+
 function main() {
 	M.launch();
 	M.reset(true);
+	var command = "";
 
 	while (true) {
-		M.logic()
+		if (command.length == 0) {
+			M.logic()
+		} else {
+			switch (command[0]) {
+				case 'h':
+					M.harvest(
+						parseInt(command.split(",")[1]),
+						parseInt(command.split(",")[2]),
+						1);
+					break;
+				case 'a':
+					M.harvestAll();
+					break;
+				case 'p':
+					const seedId = parseInt(command.split(",")[1]);
+					const seed = M.plantsById[seedId]
+					const x = parseInt(command.split(",")[2])
+					const y = parseInt(command.split(",")[3])
+
+					console.log(`Planting ${seed.name} at (${x}, ${y})`);
+					M.seedSelected=seedId;
+					M.clickTile(x,y);
+					break;
+				case 'p':
+					return;
+			}
+		}
 		state.dump();
-		readlineSync.question("\n(Press enter to `tick)`\n");
+		command = readlineSync.question("\nPress enter to `tick`\n");
 	}
 }
+
 
 state.dump=function()
 {
@@ -90,24 +122,22 @@ state.dump=function()
 				const plant = M.plantsById[plantId - 1];
 				const plantString = plant.name.padStart(23, "_");
 				if (y == M.plot[x].length - 1) {
-					process.stdout.write(`${plantString} (${lifespanString}) `);
+					process.stdout.write(`${y},${x} ${plantString} (${lifespanString}) `);
 				} else {
-					process.stdout.write(`${plantString} (${lifespanString}), `);
+					process.stdout.write(`${y},${x} ${plantString} (${lifespanString}), `);
 				}
 			} else {
 				const string = "_".toString().padStart(23, "_");
 				if (y == M.plot[x].length - 1) {
-					process.stdout.write(`${string} (${lifespanString}) `);
+					process.stdout.write(`${y},${y} ${string} (${lifespanString}) `);
 				} else {
-					process.stdout.write(`${string} (${lifespanString}), `);
+					process.stdout.write(`${y},${x} ${string} (${lifespanString}), `);
 				}
 			}
 		}
 		process.stdout.write("|\n");
 	}
 }
-
-
 
 Game.effs={};
 Game.eff=function(name,def){if (typeof Game.effs[name]==='undefined') return (typeof def==='undefined'?1:def); else return Game.effs[name];};

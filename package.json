@@ -2,9 +2,9 @@
   "name": "isolated_minigame",
   "version": "1.0.0",
   "description": "",
-  "main": "minigameGarden.js",
+  "main": "main.js",
   "scripts": {
-    "start": "node minigameGarden.js"
+    "start": "node main.js"
   },
   "author": "",
   "license": "ISC",

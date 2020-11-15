@@ -44,8 +44,6 @@ function main() {
 	M.launch();
 	M.reset(true);
 
-
-
 	while (true) {
 		M.logic()
 		M.dumpGarden();
@@ -85,8 +83,6 @@ M.dumpGarden=function()
 		process.stdout.write("|\n");
 	}
 }
-
-
 
 Game.effs={};
 Game.eff=function(name,def){if (typeof Game.effs[name]==='undefined') return (typeof def==='undefined'?1:def); else return Game.effs[name];};

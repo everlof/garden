@@ -63,7 +63,7 @@ function main() {
 	var command = "";
 
 	console.log();
-	while (true) {
+	while (state.nbrOfCollectedSeeds() != state.totalNbrOfSeeds()) {
 		if (isAuto) {
 			while (state.doAction()) { }
 			M.logic();
@@ -94,12 +94,13 @@ function main() {
 					return;
 			}
 		}
-		if (state.ticks() % 10000 == 0) {
+		if (state.ticks() % 25000 == 0) {
 			state.dump();
 		}
 
 		// command = readlineSync.question("\nPress enter to `tick`\n");
 	}
+	console.log(`Found all seeds after ${state.ticks()} ticks.`)
 }
 
 state.doAction=function() {
@@ -124,7 +125,7 @@ state.doAction=function() {
 	}
 
 	if (nbrMolds > 0 && nbrMolds == distinctPlantsInGarden.length) {
-		console.log("Harvested all mold/weed!")
+		// console.log("Harvested all mold/weed!")
 		M.harvestAll();
 		return true;
 	}
@@ -159,31 +160,83 @@ state.doAction=function() {
 	// }
 
 	for (var i = 0; i < slotsWithMaturePlants.length; i++ ) {
-		if (M.plants['elderwort'].id == slotsWithMaturePlants[i][2] - 1 && Math.random() < 0.05) {
+		if (M.plants['elderwort'].id == slotsWithMaturePlants[i][2] - 1 && Math.random() < 0.001) {
 			const name = M.plantsById[slotsWithMaturePlants[i][2] - 1].name;
-			console.log(`Harvested ${name}(${slotsWithMaturePlants[i][2] - 1}) @ {${slotsWithMaturePlants[i][1]}, ${slotsWithMaturePlants[i][0]}}`)
+			M.harvest(slotsWithMaturePlants[i][1], slotsWithMaturePlants[i][0], 1);
+			return true;
+		} else  if (M.plants['everdaisy'].id == slotsWithMaturePlants[i][2] - 1) {
+			const name = M.plantsById[slotsWithMaturePlants[i][2] - 1].name;
 			M.harvest(slotsWithMaturePlants[i][1], slotsWithMaturePlants[i][0], 1);
 			return true;
 		} else if (!unlockedSeeds.includes(slotsWithMaturePlants[i][2] - 1)) {
 			const name = M.plantsById[slotsWithMaturePlants[i][2] - 1].name;
-			console.log(`Harvested ${name}(${slotsWithMaturePlants[i][2] - 1}) @ {${slotsWithMaturePlants[i][1]}, ${slotsWithMaturePlants[i][0]}}`)
+			// console.log(`Harvested ${name}(${slotsWithMaturePlants[i][2] - 1}) @ {${slotsWithMaturePlants[i][1]}, ${slotsWithMaturePlants[i][0]}}`)
 			M.harvest(slotsWithMaturePlants[i][1], slotsWithMaturePlants[i][0], 1);
 			return true;
 		} else if (slotsWithMaturePlants[i][2] - 1 == M.plants['meddleweed'].id) {
 			const name = M.plantsById[slotsWithMaturePlants[i][2] - 1].name;
-			console.log(`Harvested ${name}(${slotsWithMaturePlants[i][2] - 1}) @ {${slotsWithMaturePlants[i][1]}, ${slotsWithMaturePlants[i][0]}}`)
 			M.harvest(slotsWithMaturePlants[i][1], slotsWithMaturePlants[i][0], 1);
 			return true;
 		}
 	}
 
 	if (occupied < 0.25) {
-		const toPlant = shuffle(unlockedSeeds)[0];
+		if (Math.random() < 0.05 &&
+			M.plants['queenbeet'].unlocked &&
+			!M.plants['queenbeetLump'].unlocked) {
+
+			console.log(`Went for a juicy queenbeet!!`);
+			M.harvestAll();
+			for (var i = 0; i < 5; i++) {
+				for (var j = 0; j < 5; j++) {
+					if (
+						(i == 1 && j == 1) ||
+						(i == 1 && j == 3) ||
+						(i == 3 && j == 1) ||
+						(i == 3 && j == 3)
+					) {
+						// Middle
+					} else {
+						M.seedSelected=M.plants['queenbeet'].id;
+						M.clickTile(i,j);
+					}
+				}
+			}
+			state.dump();
+			return true;
+		}
+
+		if (Math.random() < 0.10 &&
+			!M.plants['everdaisy'].unlocked &&
+			M.plants['tidygrass'].unlocked &&
+			M.plants['elderwort'].unlocked) {
+
+			console.log(`Went for a everdaisy!!`);
+			M.harvestAll();
+			for (var i = 0; i < 5; i++) {
+				for (var j = 0; j < 5; j++) {
+					if (i % 2 == 0) {
+						M.seedSelected=i == 2 ? M.plants['tidygrass'].id : M.plants['elderwort'].id;
+						M.clickTile(i,j);
+					}
+				}
+			}
+			state.dump();
+			return true;
+		}
+
+		const shuffled = shuffle(unlockedSeeds);
+		var toPlant = shuffled[0];
+		if (toPlant == M.plants['queenbeetLump'].id ||
+			toPlant == M.plants['everdaisy'].id) {
+			toPlant = shuffled[1];
+		}
+
 		M.seedSelected=toPlant;
 		const freeSlot = shuffle(state.randomFreeSlot())[0];
 		M.clickTile(freeSlot[1],freeSlot[0]);
 		const name = M.plantsById[toPlant].name;
-		console.log(`Planted ${name}(${toPlant}) @ {${freeSlot[1]}, ${freeSlot[0]}}`)
+		// console.log(`Planted ${name}(${toPlant}) @ {${freeSlot[1]}, ${freeSlot[0]}}`)
 		return true;
 	}
 
@@ -1199,11 +1252,11 @@ M.launch=function()
 				q:'A delicious taproot used to prepare high-grade white sugar. Entire countries once went to war over these.<br>It looks like this one has grown especially sweeter and juicier from growing in close proximity to other queenbeets.',
 				onHarvest:function(x,y,age)
 				{
-					if (age>=this.mature)
-					{
-						Game.gainLumps(1);
-						popup='(Juicy queenbeet)<br>Sweet!<div style="font-size:65%;">Found 1 sugar lump!</div>';
-					}
+					// if (age>=this.mature)
+					// {
+					// 	Game.gainLumps(1);
+					// 	popup='(Juicy queenbeet)<br>Sweet!<div style="font-size:65%;">Found 1 sugar lump!</div>';
+					// }
 				},
 			},
 			'duketater':{
@@ -2383,7 +2436,9 @@ M.launch=function()
 				if (me.onHarvest) me.onHarvest(x,y,age);
 				if (tile[1]>=me.mature)
 				{
-					if (M.unlockSeed(me)) Game.Popup('('+me.name+')<br>Unlocked '+me.name+' seed.',Game.mouseX,Game.mouseY);
+					if (M.unlockSeed(me)) {
+						Game.Popup('('+me.name+')<br>Unlocked '+me.name+' seed.',Game.mouseX,Game.mouseY);
+					}
 					M.harvests++;
 					M.harvestsTotal++;
 				}
@@ -2401,7 +2456,8 @@ M.launch=function()
 			if (me.unlocked) return false;
 			me.unlocked=1;
 			if (me.l) me.l.classList.remove('locked');
-			M.getUnlockedN();
+			const nbrUnlocked = M.getUnlockedN();
+			console.log(`Added a new seed: ${me.name} (${me.id}), unlocked: ${nbrUnlocked}`);
 			return true;
 		}
 		M.lockSeed=function(me)

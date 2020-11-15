@@ -4,6 +4,7 @@ const indexContents = readTextFile.readSync('index.html');
 
 const jsdom = require("jsdom");
 const { stdin, mainModule } = require("process");
+const { stat } = require('fs');
 const { JSDOM } = jsdom;
 
 const dom = new JSDOM(indexContents);
@@ -38,24 +39,44 @@ var state = {};
 state.nbrOfCollectedSeeds = function() { return M.getUnlockedN(); };
 state.totalNbrOfSeeds = function() { return M.plantsN; }
 state.ticks = function() { return M.tick; }
-state.plot =  function() { return M.plot }
+state.plot = function() { return M.plot }
 
 function main() {
 	M.launch();
 	M.reset(true);
 
-
-
 	while (true) {
 		M.logic()
-		M.dumpGarden();
-		console.log();
-		readlineSync.question(`[ticks: ${state.ticks()}, collected_seeds: ${state.nbrOfCollectedSeeds()}] Press enter for next tick\n`);
+		state.dump();
+		readlineSync.question("\n(Press enter to `tick)`\n");
 	}
 }
 
-M.dumpGarden=function()
+state.dump=function()
 {
+	process.stdout.write(`# of ticks: ${state.ticks()}\n`);
+	process.stdout.write(`# of seeds: ${state.nbrOfCollectedSeeds()} of ${state.totalNbrOfSeeds()}\n`);
+
+	process.stdout.write(`\n`);
+	process.stdout.write(`Unlocked seeds:\n`);
+	for (var i = 0 ; i < M.plantsN; i ++ ) {
+		if (M.plantsById[i].unlocked) {
+			process.stdout.write(`${i}, `);
+		}
+	}
+	process.stdout.write(`\n`);
+
+	process.stdout.write(`Locked seeds seeds:\n`);
+	for (var i = 0 ; i < M.plantsN; i ++ ) {
+		if (!M.plantsById[i].unlocked) {
+			process.stdout.write(`${i}, `);
+		}
+	}
+	process.stdout.write(`\n`);
+
+	process.stdout.write(`Garden:\n`);
+	process.stdout.write(`\n`);
+
 	for (var x = 0; x < M.plot.length; x++) {
 		process.stdout.write("| ");
 		for (var y = 0; y < M.plot[x].length; y++) {

@@ -34,15 +34,23 @@ var M={
 	},
 };
 
+var state = {};
+state.nbrOfCollectedSeeds = function() { return M.getUnlockedN(); };
+state.totalNbrOfSeeds = function() { return M.plantsN; }
+state.ticks = function() { return M.tick; }
+state.plot =  function() { return M.plot }
+
 function main() {
 	M.launch();
 	M.reset(true);
+
+
 
 	while (true) {
 		M.logic()
 		M.dumpGarden();
 		console.log();
-		readlineSync.question(`[Ticks: ${M.tick}] Press enter for next tick\n`);
+		readlineSync.question(`[ticks: ${state.ticks()}, collected_seeds: ${state.nbrOfCollectedSeeds()}] Press enter for next tick\n`);
 	}
 }
 

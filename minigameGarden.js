@@ -29,6 +29,7 @@ var Game={
 };
 
 var M={
+	'plantAcquisition': [],
 	'parent': {
 		'id': 2,
 		'level': 10
@@ -40,6 +41,7 @@ state.nbrOfCollectedSeeds = function() { return M.getUnlockedN(); };
 state.totalNbrOfSeeds = function() { return M.plantsN; }
 state.ticks = function() { return M.tick; }
 state.plot = function() { return M.plot }
+state.plantIndex = 0;
 state.occupied = function() {
 	var totalPlots = 0;
 	var occupiedPlots = 0;
@@ -54,12 +56,28 @@ state.occupied = function() {
 	return occupiedPlots / totalPlots;
 }
 
-function main() {
+state.reset=function() {
+	state.plantIndex = 0;
+}
+
+function main(max) {
+	var runs = 0;
+	while (runs < max) {
+		const singleRun = single();
+		console.log(`${runs + 1} of ${max} > Found all seeds after ${singleRun} ticks`);
+		runs++;
+	}
+}
+
+function single() {
 	const isAuto = true; // process.argv[process.argv.length - 1] == "--auto";
 
+	state.reset();
+	M.tick = 0;
 	M.launch();
 	M.reset(true);
 	M.soil = 4; // woodchip
+	M.setupParents();
 	var command = "";
 
 	console.log();
@@ -94,13 +112,13 @@ function main() {
 					return;
 			}
 		}
-		if (state.ticks() % 25000 == 0) {
-			state.dump();
-		}
-
+		// if (state.ticks() % 25000 == 0) {
+		// 	state.dump();
+		// }
 		// command = readlineSync.question("\nPress enter to `tick`\n");
 	}
-	console.log(`Found all seeds after ${state.ticks()} ticks.`)
+
+	return state.ticks();
 }
 
 state.doAction=function() {
@@ -125,42 +143,12 @@ state.doAction=function() {
 	}
 
 	if (nbrMolds > 0 && nbrMolds == distinctPlantsInGarden.length) {
-		// console.log("Harvested all mold/weed!")
 		M.harvestAll();
 		return true;
 	}
 
-	// if (occupied > 0.8) {
-	// 	console.log("Harvested all!")
-	// 	M.harvestAll();
-	// 	return true;
-	// }
-
-	// for (var i = 0; i < distinctPlantsInGarden.length; i++) {
-	// 	const plant = M.plantsById[distinctPlantsInGarden[i]];
-	// 	var unlocked = 0;
-	// 	for (var j in plant.children) {
-	// 		const childPlant = M.plants[plant.children[j]];
-	// 		if (childPlant.unlocked) {
-	// 			unlocked++;
-	// 		}
-	// 	}
-
-	// 	// No mutation we want in this strain
-	// 	if (plant.children.length > 0 && plant.children.length == unlocked) {
-	// 		for (var x = 0; x < M.plot.length; x++) {
-	// 			for (var y = 0; y < M.plot[x].length; y++) {
-	// 				if (M.plot[x][y][0] == plant.id) {
-	// 					M.harvest(y, x, 1);
-	// 				}
-	// 			}
-	// 		}
-	// 		return true;
-	// 	}
-	// }
-
 	for (var i = 0; i < slotsWithMaturePlants.length; i++ ) {
-		if (M.plants['elderwort'].id == slotsWithMaturePlants[i][2] - 1 && Math.random() < 0.001) {
+		if (M.plants['elderwort'].id == slotsWithMaturePlants[i][2] - 1 && Math.random() < 0.01) {
 			const name = M.plantsById[slotsWithMaturePlants[i][2] - 1].name;
 			M.harvest(slotsWithMaturePlants[i][1], slotsWithMaturePlants[i][0], 1);
 			return true;
@@ -180,12 +168,18 @@ state.doAction=function() {
 		}
 	}
 
-	if (occupied < 0.25) {
-		if (Math.random() < 0.05 &&
-			M.plants['queenbeet'].unlocked &&
+	if (occupied < 0.35) {
+		if (M.plants['queenbeet'].unlocked &&
 			!M.plants['queenbeetLump'].unlocked) {
 
-			console.log(`Went for a juicy queenbeet!!`);
+			for (var i = 0; i < 5; i++) {
+				for (var j = 0; j < 5; j++) {
+					if ((M.plot[i][j][0] - 1) == M.plants['queenbeetLump'].id) {
+						return false;
+					}
+				}
+			}
+
 			M.harvestAll();
 			for (var i = 0; i < 5; i++) {
 				for (var j = 0; j < 5; j++) {
@@ -202,16 +196,21 @@ state.doAction=function() {
 					}
 				}
 			}
-			state.dump();
 			return true;
 		}
 
-		if (Math.random() < 0.10 &&
-			!M.plants['everdaisy'].unlocked &&
+		if (!M.plants['everdaisy'].unlocked &&
 			M.plants['tidygrass'].unlocked &&
 			M.plants['elderwort'].unlocked) {
 
-			console.log(`Went for a everdaisy!!`);
+			for (var i = 0; i < 5; i++) {
+				for (var j = 0; j < 5; j++) {
+					if ((M.plot[i][j][0] - 1) == M.plants['everdaisy'].id) {
+						return false;
+					}
+				}
+			}
+
 			M.harvestAll();
 			for (var i = 0; i < 5; i++) {
 				for (var j = 0; j < 5; j++) {
@@ -221,26 +220,47 @@ state.doAction=function() {
 					}
 				}
 			}
-			state.dump();
 			return true;
 		}
 
-		const shuffled = shuffle(unlockedSeeds);
-		var toPlant = shuffled[0];
+		var seedsWeMayPlant = state.plantsNeededForSeeds(lockedSeeds);
+		var toPlant = seedsWeMayPlant[state.plantIndex % seedsWeMayPlant.length];
 		if (toPlant == M.plants['queenbeetLump'].id ||
 			toPlant == M.plants['everdaisy'].id) {
-			toPlant = shuffled[1];
+			toPlant = seedsWeMayPlant[1];
+		}
+
+		if (M.plantsById[toPlant] === undefined) {
+			return false;
 		}
 
 		M.seedSelected=toPlant;
-		const freeSlot = shuffle(state.randomFreeSlot())[0];
+		var freeSlots = state.randomFreeSlot();
+		shuffle(freeSlots);
+		const freeSlot = freeSlots[0];
 		M.clickTile(freeSlot[1],freeSlot[0]);
 		const name = M.plantsById[toPlant].name;
 		// console.log(`Planted ${name}(${toPlant}) @ {${freeSlot[1]}, ${freeSlot[0]}}`)
+		state.plantIndex += 1;
 		return true;
 	}
 
 	return false;
+}
+
+state.plantsNeededForSeeds=function(seeds) {
+	var suggestedSeeds = [];
+	for (var i in seeds) {
+		const plantWeWant = M.plantsById[seeds[i]];
+		const parentsOfPlantWeWant = plantWeWant.parents;
+		for (var j in parentsOfPlantWeWant) {
+			const name = parentsOfPlantWeWant[j];
+			if (M.plants[name].unlocked) {
+				suggestedSeeds.push(M.plants[name].id);
+			}
+		}
+	}
+	return suggestedSeeds;
 }
 
 state.slotsWithMaturePlants=function() {
@@ -289,6 +309,20 @@ state.lockedSeeds=function() {
 	return locked;
 }
 
+M.setupParents=function (params) {
+	for (var plant in M.plants) {
+		for (var childIndex in M.plants[plant].children) {
+			const childName = M.plants[plant].children[childIndex];
+			if (M.plants[childName].parents === undefined) {
+				M.plants[childName].parents = [];
+			}
+			if (!M.plants[childName].parents.includes(childName)) {
+				M.plants[childName].parents.push(plant);
+			}
+		}
+	}
+}
+
 state.unlockedSeeds=function() {
 	var unlocked = [];
 	for (var x = 0; x < M.plantsN; x++ ) {
@@ -321,7 +355,7 @@ state.dump=function()
 	}
 	process.stdout.write(`\n`);
 
-	process.stdout.write(`Locked seeds seeds:\n`);
+	process.stdout.write(`Locked seeds:\n`);
 	for (var i = 0 ; i < M.plantsN; i ++ ) {
 		if (!M.plantsById[i].unlocked) {
 			process.stdout.write(`${M.plantsById[i].name} (${i}), `);
@@ -341,20 +375,22 @@ state.dump=function()
 			const plantIdString = plantId.toString().padStart(2, "0");
 			const lifespanString = lifespan.toString().padStart(3, "0") + "%";
 
+
 			if (plantId > 0) {
 				const plant = M.plantsById[plantId - 1];
-				const plantString = plant.name.padStart(23, "_");
+				const isMatureSign = lifespan >= plant.mature ? "M" : "_";
+				const plantString = plant.name.padStart(19, "_");
 				if (y == M.plot[x].length - 1) {
-					process.stdout.write(`${y},${x} ${plantString} (${lifespanString}) `);
+					process.stdout.write(`${y},${x} ${isMatureSign}${plantString} (${lifespanString}) `);
 				} else {
-					process.stdout.write(`${y},${x} ${plantString} (${lifespanString}), `);
+					process.stdout.write(`${y},${x} ${isMatureSign}${plantString} (${lifespanString}), `);
 				}
 			} else {
-				const string = "_".toString().padStart(23, "_");
+				const string = "_".toString().padStart(19, "_");
 				if (y == M.plot[x].length - 1) {
-					process.stdout.write(`${y},${y} ${string} (${lifespanString}) `);
+					process.stdout.write(`${y},${y} _${string} (${lifespanString}) `);
 				} else {
-					process.stdout.write(`${y},${x} ${string} (${lifespanString}), `);
+					process.stdout.write(`${y},${x} _${string} (${lifespanString}), `);
 				}
 			}
 		}
@@ -416,6 +452,10 @@ function randomFloor(x) {if ((x%1)<Math.random()) return Math.floor(x); else ret
 
 function shuffle(array)
 {
+	if (array.length == 2 && Math.random() < 0.5) {
+		return array;
+	}
+
 	var counter = array.length, temp, index;
 	// While there are elements in the array
 	while (counter--)
@@ -2457,7 +2497,13 @@ M.launch=function()
 			me.unlocked=1;
 			if (me.l) me.l.classList.remove('locked');
 			const nbrUnlocked = M.getUnlockedN();
-			console.log(`Added a new seed: ${me.name} (${me.id}), unlocked: ${nbrUnlocked}`);
+			// console.log(`Added a new seed: ${me.name} (${me.id}), unlocked: ${nbrUnlocked}`);
+			M.plantAcquisition.push({
+				"name": me.name,
+				"id": me.id,
+				"ticks": M.tick
+			})
+			// console.log(M.plantAcquisition);
 			return true;
 		}
 		M.lockSeed=function(me)
@@ -3494,4 +3540,4 @@ Game.SparkleOn=function(el)
 }
 
 Game.l=l('game');
-main();
+main(1000);

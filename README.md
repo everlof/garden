@@ -17,6 +17,47 @@ How to play interactively:
 - h,1,2 -> harvest plant at `(1,2)`
 - a -> harvest all plants
 
+# Completed runs
+
+#### First version
+
+- 320,057 ticks
+- 434,468 ticks
+
+#### Version that only plants seeds that can yield seed that we don't have
+
+*This version takes around 30 seconds to complete.*
+
+- 16,888 ticks
+- 16,469 ticks
+- 15,721 ticks
+- 19,181 ticks
+- 18,195 ticks
+- 17,228 ticks
+- **9,644 ticks**
+- 13,189 ticks
+- 19,027 ticks
+- 12,866 ticks
+- 20,096 ticks
+- 15,527 ticks
+- 24,776 ticks
+- 18,503 ticks
+- 15,458 ticks
+- 19,485 ticks
+- 19,881 ticks
+- 20,447 ticks
+- 23,290 ticks
+- 25,210 ticks
+- **46,714 ticks**
+- 18,283 ticks
+- 10,501 ticks
+- 14,197 ticks
+- 16,616 ticks
+- 18,365 ticks
+- 10,793 ticks
+- 15,456 ticks
+- 8,080 tick
+
 # Saves
 
 Full garden, no seeds:
